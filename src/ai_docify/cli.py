@@ -43,9 +43,12 @@ def read_file(filepath: str) -> str:
     str
         The file contents.
     """
-    path_obj = Path(filepath)
-    with path_obj.open("r", encoding="utf-8") as f:
-        return f.read()
+    path_obj: Path = Path(filepath)
+    try:
+        with path_obj.open("r", encoding="utf-8") as f:
+            return f.read()
+    except OSError as e:
+        raise IOError(f"Failed to read file {filepath}: {e}") from e
 
 
 def write_output_file(output_dir: Path, filename: str, content: str) -> Path:
@@ -67,10 +70,13 @@ def write_output_file(output_dir: Path, filename: str, content: str) -> Path:
         The full path to the written file.
     """
     output_dir.mkdir(exist_ok=True)
-    output_path = output_dir / filename
-    with output_path.open("w", encoding="utf-8") as f:
-        f.write(content)
-    return output_path
+    output_path: Path = output_dir / filename
+    try:
+        with output_path.open("w", encoding="utf-8") as f:
+            f.write(content)
+        return output_path
+    except OSError as e:
+        raise IOError(f"Failed to write file {output_path}: {e}") from e
 
 
 # --- Console Helpers ---

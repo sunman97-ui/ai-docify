@@ -8,15 +8,12 @@ inject docstrings for individual symbols using a tool schema.
 """
 
 import json
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
 from openai import OpenAI, OpenAIError
 from rich.console import Console
 from .builder import build_messages
 from .strategies import DOCSTRING_TOOL_SCHEMA
 from .tools import insert_docstrings_to_source
-
-# --- Global Console ---
-console = Console()
 
 
 # --- Public API ---
@@ -26,6 +23,7 @@ def generate_documentation(
     model: str,
     api_key: str | None,
     mode: str = "rewrite",
+    console: Optional[Console] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Generate documentation for Python source either by rewriting the file or by
@@ -45,6 +43,8 @@ def generate_documentation(
         Operation mode; either "rewrite" to return a rewritten file with
         documentation or "inject" to insert docstrings into existing code.
         Default is "rewrite".
+    console : Optional[Console], optional
+        Console instance for output. If None, a new Console is created.
 
     Returns
     -------
@@ -53,6 +53,8 @@ def generate_documentation(
         an error message (str), and the second being a usage dictionary with keys
         "input_tokens", "output_tokens", and "reasoning_tokens" (values are ints).
     """
+    if console is None:
+        console = Console()
     try:
         # --- Client Initialization ---
         if provider == "ollama":
