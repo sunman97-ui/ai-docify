@@ -12,12 +12,12 @@
 
 ## ✨ Key Features
 
-- **💰 Cost-Aware Design**: Unlike other tools, `ai-docify` calculates and displays the **estimated input token cost** via `tiktoken` *before* you spend a penny.
+- **💰 Cost-Aware Design**: `ai-docify` calculates and displays the **estimated input token cost** via `tiktoken` *before* you spend a penny.
 - **🔒 Privacy-First**: Switch seamlessly between **OpenAI** (Cloud) and **Ollama** (Local) with a single flag. Keep proprietary code on your machine when needed.
 - **🛡️ Non-Destructive**: Your original files are never touched. Documented code is safely written to a dedicated `ai_output/` directory.
 - **✌️ Dual Generation Modes**: Choose between `rewrite` for speed and economy, or `inject` for surgical precision that preserves 100% of your original code formatting.
-- **⚡ "Lean" Templates**: Optimized prompts ensure high-quality documentation without wasting tokens on unnecessary conversational fluff.
-- **⚙️ Future-Proof Config**: Easily add support for new models (e.g., GPT-6, Llama-4) just by updating the `pricing.json` configuration file.
+- **⚡ "Lean" Architecture**: Optimized prompt engineering ensures high-quality documentation without wasting tokens on unnecessary conversational fluff.
+- **⚙️ Extensible Config**: Easily add support for new models (e.g., GPT-6, Llama-4) just by updating the `pricing.json` configuration file.
 
 ---
 
@@ -35,16 +35,10 @@ Currently, `ai-docify` is available via source installation.
 1. **Clone the repository**
 
    ```bash
-
    git clone https://github.com/sunman97-ui/ai-docify.git
-   
-   ```
-
-   ```bash
-
    cd ai-docify
 
-    ```
+   ```
 
 2. **Create a Virtual Environment** (Recommended)
 
@@ -67,7 +61,7 @@ pip install -e .
 ```
 
 1. **Setup Environment Variables**
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory (required for OpenAI):
 
 ```ini
 OPENAI_API_KEY=sk-your-api-key-here
@@ -92,16 +86,18 @@ This mode asks the AI to rewrite the entire file, adding comprehensive documenta
 
 ```bash
 ai-docify my_script.py --provider openai --model gpt-5-mini --mode rewrite
+
 ```
 
 #### `inject` Mode
 
 *Best for surgical precision and preserving formatting.*
 
-This mode intelligently injects docstrings without altering any other part of your code—including formatting and comments. It is the ideal choice for projects with strict linting rules or when you only want to add documentation without any other changes. This precision comes at a slightly higher token cost.
+This mode intelligently injects docstrings without altering any other part of your code—including formatting and comments. It uses Function Calling to insert docstrings directly into the AST (Abstract Syntax Tree). This precision comes at a slightly higher token cost.
 
 ```bash
 ai-docify my_script.py --provider openai --model gpt-5-mini --mode inject
+
 ```
 
 ### 1. Using OpenAI (Cloud)
@@ -130,7 +126,7 @@ Before generating anything, the tool will pause and show you an estimation:
 ```text
 🤖 ai-docify: Checking my_script.py
 
-📊 Estimation:
+📊 Estimation (Input Only):
    Tokens: 350
    Est. Cost: $0.00009
 
@@ -160,7 +156,7 @@ After the documentation is generated, `ai-docify` provides a transparent receipt
 
 `ai-docify` is built to be extensible. You define which models are allowed and how much they cost.
 
-**Location:** `src/ai_docify/config/pricing.json`
+**Location:** `src/ai_docify/pricing.json`
 
 To add a new model, simply edit this file:
 
@@ -180,10 +176,9 @@ To add a new model, simply edit this file:
 
 ## 🗺️ Roadmap
 
-I am actively working on Batch Processing:
-
 - [x] **Pre-Run Estimation:** Calculate input tokens and estimated cost using `tiktoken`.
-- [x] **Post-Run Analysis:** Reports `output_tokens`, `reasoning_tokens` (for complex models), and the **Total Combined Cost** (Input + Output) after generation.
+- [x] **Post-Run Analysis:** Reports `output_tokens`, `reasoning_tokens`, and Total Cost.
+- [x] **Architecture Refactor:** Simplified codebase for easier community contribution.
 - [ ] **Batch Processing:** Support for documenting entire directories.
 
 ## 🤝 Contributing

@@ -26,9 +26,8 @@ ai-docify = "ai_docify.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ai_docify = ["templates/*.json", "config/*.json"]
+ai_docify = ["templates/*.json", "pricing.json"]
 
-# --- ADD THIS SECTION AT THE BOTTOM ---
 [tool.black]
 line-length = 88
 target-version = ['py38']

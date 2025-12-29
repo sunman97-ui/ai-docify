@@ -1,12 +1,10 @@
 """
-cost_estimator.py
+Utilities for estimating token usage and monetary cost for LLM payloads.
 
-Utility functions for estimating token usage and monetary cost for
-LLM prompts based on provider/model pricing information.
-
-The primary public function, `estimate_cost`, constructs the full prompt,
-counts tokens—including optional tool-schema injection—and translates the
-token count into a cost figure using provider-specific pricing metadata.
+This module provides helpers to calculate monetary cost from a token count and
+to estimate token usage and cost for a payload constructed for an LLM. It
+relies on centralized configuration and payload generation utilities to ensure
+estimates match the actual generation behavior.
 """
 
 from __future__ import annotations
@@ -14,29 +12,34 @@ import json
 from typing import Any, Dict
 import tiktoken
 from .config import get_model_price
-from .builder import build_messages
-from .strategies import DOCSTRING_TOOL_SCHEMA
+from .generator import prepare_llm_payload
+
+
+# --- Helper Functions ------------------------------------------------------
 
 
 def calculate_token_cost(tokens: int, price_per_million: float) -> float:
     """
-    Calculate the monetary cost for a given token count.
+    Calculate cost based on token count and price.
 
     Parameters
     ----------
     tokens : int
         Number of tokens.
     price_per_million : float
-        Price per 1,000,000 tokens.
+        Price per one million tokens.
 
     Returns
     -------
     float
-        Calculated cost in dollars. Returns 0.0 if price is <= 0.
+        Estimated monetary cost for the given token count.
     """
     if price_per_million <= 0:
         return 0.0
     return (tokens / 1_000_000) * price_per_million
+
+
+# --- Cost Estimation ------------------------------------------------------
 
 
 def estimate_cost(
@@ -46,85 +49,61 @@ def estimate_cost(
     mode: str = "rewrite",
 ) -> Dict[str, Any]:
     """
-    Estimate the token count and monetary cost for a prompt.
-
-    This helper bundles the entire workflow required for cost estimation:
-    message construction, optional tool-schema injection, tokenization using
-    the correct encoding, and price conversion through provider metadata.
+    Estimate token count and cost using the exact payload logic used for generation.
 
     Parameters
     ----------
     file_content : str
-        The source text that will populate the user message.
+        The textual content of the file to be processed by the LLM.
     provider : str
-        Name of the LLM provider (e.g., ``"openai"``) used for price lookup.
+        The provider identifier used to look up pricing information.
     model : str
-        Model identifier (e.g., ``"gpt-4"``) used for encoding selection and
-        cost calculation.
-    mode : str, default="rewrite"
-        Prompt-construction strategy. When set to ``"inject"``, the function
-        appends the tool schema to the prompt, increasing the token count.
+        The model identifier used to select the tokenizer/encoding.
+    mode : str
+        Mode passed to the payload preparer (e.g., "rewrite", "summarize").
 
     Returns
     -------
-    dict
-        A dictionary containing:
-
-        ``"tokens"`` : int
-            Total number of tokens in the prompt.
-        ``"input_cost"`` : float
-            Estimated cost in U.S. dollars for the input prompt.
-        ``"currency"`` : str
-            ``"USD"`` for paid models, or ``"Free/Local"`` when no cost is
-            associated.
+    Dict[str, Any]
+        Dictionary containing:
+        - "tokens": int number of estimated tokens,
+        - "input_cost": float estimated cost for input tokens,
+        - "currency": str currency or indicator (e.g., "USD" or "Free/Local").
     """
-    # ------------------------------------------------------------------------- #
-    # --- Pricing Metadata Lookup --------------------------------------------- #
-    # ------------------------------------------------------------------------- #
-    price_info: Dict[str, Any] = get_model_price(provider, model)
+    price_info = get_model_price(provider, model)
 
-    # ------------------------------------------------------------------------- #
-    # --- Prompt Construction -------------------------------------------------- #
-    # ------------------------------------------------------------------------- #
-    # 1. Build messages according to the selected mode (loads the correct
-    #    system/user prompt template).
-    messages = build_messages(file_content, mode=mode)
+    # 1. Get the authoritative payload from generator
+    payload = prepare_llm_payload(file_content, mode=mode)
 
-    # Concatenate all message content for tokenization.
-    full_text: str = "".join(msg["content"] for msg in messages)
+    messages = payload.get("messages", [])
+    tools = payload.get("tools")
 
-    # 2. Append tool schema when operating in "inject" mode to reflect the
-    #    actual prompt sent to the LLM.
-    if mode == "inject":
-        full_text += json.dumps(DOCSTRING_TOOL_SCHEMA)
+    # 2. Serialize for token counting
+    # Concatenate message content
+    full_text = "".join(msg["content"] for msg in messages)
 
-    # ------------------------------------------------------------------------- #
-    # --- Token Counting ------------------------------------------------------- #
-    # ------------------------------------------------------------------------- #
+    # Append tool schema if present (serialize structure for token estimation)
+    if tools:
+        full_text += json.dumps(tools)
+
+    # 3. Count Tokens
     try:
         encoding = tiktoken.encoding_for_model(model)
     except KeyError:
-        # Fallback to a generic encoding when model-specific rules are missing.
+        # Fallback to a sensible default encoding when model-specific one is missing
         encoding = tiktoken.get_encoding("cl100k_base")
 
-    # Each chat message wrapper contributes 4 additional tokens (OpenAI format).
-    token_count: int = len(encoding.encode(full_text)) + (len(messages) * 4)
+    # Add message overhead (approx 4 tokens per message for OpenAI-style protocols)
+    # The overhead accounts for structural tokens
+    # (role/name/delimiters) not present in raw content.
+    token_count = len(encoding.encode(full_text)) + (len(messages) * 4)
 
-    # ------------------------------------------------------------------------- #
-    # --- Cost Calculation ----------------------------------------------------- #
-    # ------------------------------------------------------------------------- #
-    input_price: float = price_info.get("input_cost_per_million", 0.0)
-
+    # 4. Calculate Cost
+    input_price = price_info.get("input_cost_per_million", 0.0)
     estimated_cost = calculate_token_cost(token_count, input_price)
 
-    # ------------------------------------------------------------------------- #
-    # --- Result Assembly ------------------------------------------------------ #
-    # ------------------------------------------------------------------------- #
     return {
         "tokens": token_count,
         "input_cost": estimated_cost,
         "currency": "USD" if input_price > 0 else "Free/Local",
     }
-
-
-__all__: list[str] = ["estimate_cost", "calculate_token_cost"]

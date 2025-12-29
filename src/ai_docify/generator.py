@@ -1,37 +1,132 @@
 """
-Utilities for generating or injecting docstrings into Python source code using an LLM.
-
-This module provides a single high-level function, generate_documentation, which
-communicates with an OpenAI-compatible API (including local Ollama instances)
-to either rewrite an entire file with added documentation or to generate and
-inject docstrings for individual symbols using a tool schema.
+Utilities for generating or injecting NumPy-style docstrings into Python source
+code using a large language model (LLM). This module centralizes prompt/template
+loading, payload construction for the LLM, API interaction, and post-processing
+(including injecting docstrings back into source).
 """
 
 import json
 import logging
-import sys
+from pathlib import Path
 from typing import Tuple, Dict, Any, Optional
 from openai import OpenAI, OpenAIError
 from rich.console import Console
-from .builder import build_messages
-from .strategies import DOCSTRING_TOOL_SCHEMA
+
+# Internal imports
 from .tools import insert_docstrings_to_source
 
-# Configure logging with proper format and level
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("ai_docify.log")],
-)
-
+# --- Logger Setup ---
 logger = logging.getLogger(__name__)
 
 
-# Custom exception class for better error handling
+# --- Constants & Schemas ---
+DOCSTRING_TOOL_SCHEMA = [
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_one_docstring",
+            "description": "Submits a single generated docstring for a specific"
+            "function or for the module-level documentation in Python code.",
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The exact name of the function or class. "
+                        "For module-level docstrings, use '__module__'.",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "The full NumPy-style docstring content.",
+                    },
+                },
+                "required": ["name", "body"],
+                "additionalProperties": False,
+            },
+        },
+    }
+]
+
+
+# --- Exceptions ---
 class AIDocifyError(Exception):
-    """Custom exception for AI-Docify specific errors."""
+    """
+    Custom exception for AI-Docify specific errors.
+
+    Parameters
+    ----------
+    message : str | None
+        Optional error message describing the failure.
+
+    Returns
+    -------
+    AIDocifyError
+        The instantiated exception.
+    """
 
     pass
+
+
+# --- Helper Functions ---
+def _load_template() -> dict:
+    """
+    Load the JSON prompt template from disk.
+
+    Parameters
+    ----------
+    None : None
+        No parameters.
+
+    Returns
+    -------
+    dict
+        The loaded JSON template as a dictionary.
+
+    """
+    template_path = Path(__file__).parent / "templates" / "docstring_generator.json"
+    if not template_path.exists():
+        raise FileNotFoundError(f"Template not found at: {template_path}")
+
+    with open(template_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+# --- Payload Construction ---
+def prepare_llm_payload(file_content: str, mode: str = "rewrite") -> Dict[str, Any]:
+    """
+    Construct the exact payload (messages + optional tools) for the LLM.
+
+    Parameters
+    ----------
+    file_content : str
+        The raw source file content to be included in the LLM prompt.
+    mode : str, optional
+        Mode of operation; one of "rewrite" or "inject" (default is "rewrite").
+
+    Returns
+    -------
+    Dict[str, Any]
+        A payload dictionary containing the messages and, for "inject" mode,
+        a tools schema.
+    """
+    template = _load_template()
+    prompt_details = template.get(mode, template.get("rewrite"))
+
+    system_prompt = prompt_details["system_prompt"]
+    user_prompt = prompt_details["user_prompt"].format(raw_text=file_content)
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    payload: Dict[str, Any] = {"messages": messages}
+
+    if mode == "inject":
+        payload["tools"] = DOCSTRING_TOOL_SCHEMA
+
+    return payload
 
 
 # --- Public API ---
@@ -44,42 +139,35 @@ def generate_documentation(
     console: Optional[Console] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """
-    Generate documentation for Python source either by rewriting the file or by
-    injecting generated docstrings.
+    Generate documentation for Python source.
 
     Parameters
     ----------
     file_content : str
-        The full source code of the Python file to document.
+        The Python source code to document.
     provider : str
-        The provider identifier, e.g., "ollama" for local Ollama or other for OpenAI.
+        The backend provider identifier (e.g., "openai" or "ollama").
     model : str
         The model name to request from the provider.
     api_key : str | None
-        The API key for remote providers. Use None for local providers like Ollama.
+        API key for authentication with the provider (required for OpenAI).
     mode : str, optional
-        Operation mode; either "rewrite" to return a rewritten file with
-        documentation or "inject" to insert docstrings into existing code.
-        Default is "rewrite".
+        Operation mode: "rewrite" returns a full rewritten source string;
+        "inject" returns the original source with docstrings injected (default "rewrite").
     console : Optional[Console], optional
-        Console instance for output. If None, a new Console is created.
+        Optional Rich Console for user-facing messages (default creates a new Console).
 
     Returns
     -------
     Tuple[str, Dict[str, Any]]
-        A tuple with the first element being either the documented code (str) or
-        an error message (str), and the second being a usage dictionary with keys
-        "input_tokens", "output_tokens", and "reasoning_tokens" (values are ints).
-
-    Raises
-    ------
-    AIDocifyError
-        If there's an error with the API call or processing the response.
+        A tuple of (resulting_source_or_text, usage_stats) where usage_stats is a
+        mapping containing token usage keys ("input_tokens",
+        "output_tokens", "reasoning_tokens").
     """
     if console is None:
         console = Console()
 
-    # Initialize empty usage stats in case of early return
+    # Initialize empty usage stats
     usage: Dict[str, int] = {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -87,48 +175,24 @@ def generate_documentation(
     }
 
     try:
-        # --- Client Initialization ---
+        # 1. Initialize Client
         if provider == "ollama":
-            try:
-                client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
-                logger.info("Connecting to local Ollama with model %s", model)
-                console.print(
-                    f"Connecting to local Ollama with model [cyan]{model}[/]..."
-                )
-            except Exception as e:
-                logger.error("Failed to initialize Ollama client: %s", e)
-                raise AIDocifyError(f"Failed to initialize Ollama client: {e}") from e
+            client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+            logger.info("Connecting to local Ollama with model %s", model)
         else:
             if not api_key:
-                logger.error("API key is required for OpenAI but was not provided")
                 raise AIDocifyError("API key is required for OpenAI")
+            client = OpenAI(api_key=api_key)
+            logger.info("Connecting to OpenAI with model %s", model)
 
-            try:
-                client = OpenAI(api_key=api_key)
-                logger.info("Connecting to OpenAI with model %s", model)
-                console.print(f"Connecting to OpenAI with model [cyan]{model}[/]...")
-            except Exception as e:
-                logger.error("Failed to initialize OpenAI client: %s", e)
-                raise AIDocifyError(f"Failed to initialize OpenAI client: {e}") from e
-
+        # 2. Prepare Payload (Centralized Logic)
         try:
-            messages = build_messages(file_content, mode=mode)
-        except FileNotFoundError as e:
-            logger.error("Failed to load template: %s", e)
-            raise AIDocifyError(f"Failed to load template: {e}") from e
+            payload = prepare_llm_payload(file_content, mode=mode)
         except Exception as e:
-            logger.error("Error building messages: %s", e)
             raise AIDocifyError(f"Error building messages: {e}") from e
 
-        # --- API CALL PREPARATION ---
-        kwargs = {
-            "model": model,
-            "messages": messages,
-        }
-
-        # If Inject Mode: Attach tools. Do NOT force a call, allow multiple calls.
-        if mode == "inject":
-            kwargs["tools"] = DOCSTRING_TOOL_SCHEMA
+        # 3. Call API
+        kwargs = {"model": model, **payload}
 
         logger.info("Generating documentation (%s mode)", mode)
         console.print(f"Generating documentation ({mode} mode)...")
@@ -136,124 +200,55 @@ def generate_documentation(
         try:
             response = client.chat.completions.create(**kwargs)
         except OpenAIError as e:
-            logger.error("API error: %s", e)
             raise AIDocifyError(f"API error: {e}") from e
-        except Exception as e:
-            logger.error("Unexpected error during API call: %s", e)
-            raise AIDocifyError(f"Unexpected error during API call: {e}") from e
 
-        # --- USAGE EXTRACTION ---
+        # 4. Extract Usage
         if response.usage:
             usage["input_tokens"] = response.usage.prompt_tokens
             usage["output_tokens"] = response.usage.completion_tokens
-            # completion_tokens_details may be either a dict or an object with attributes
+            # Handle varied shapes of completion_tokens_details (may be dict or object)
             if hasattr(response.usage, "completion_tokens_details"):
                 details = response.usage.completion_tokens_details
-                # If dict-like, prefer dict access; otherwise attribute access.
+                # If dict-like, pull reasoning_tokens key; otherwise, use attribute access
                 if isinstance(details, dict):
                     usage["reasoning_tokens"] = details.get("reasoning_tokens", 0)
                 else:
                     usage["reasoning_tokens"] = getattr(details, "reasoning_tokens", 0)
 
-        logger.info("API response received. Processing output...")
-
-        # --- RESPONSE HANDLING ---
+        # 5. Process Response
         if mode == "rewrite":
-            if (
-                not hasattr(response.choices[0], "message")
-                or not response.choices[0].message.content
-            ):
-                logger.error("Invalid API response: missing message content")
-                raise AIDocifyError("Invalid API response: missing message content")
+            content = response.choices[0].message.content
+            if not content:
+                raise AIDocifyError("Invalid API response: missing content")
 
-            documented_code = response.choices[0].message.content
+            # Strip markdown fences if the model wrapped the code block
+            if content.startswith("```python"):
+                content = content[
+                    9:
+                ].lstrip()  # remove the opening triple-backticks and language tag
+            if content.endswith("```"):
+                content = content[:-3].rstrip()  # remove closing triple-backticks
 
-            # Trim fenced code blocks if present.
-            if documented_code.startswith("```python"):
-                # remove the opening fence and any leading whitespace/newline
-                documented_code = documented_code[len("```python") :].lstrip()
-            if documented_code.endswith("```"):
-                # remove the closing fence and any trailing whitespace/newline
-                documented_code = documented_code[: -len("```")].rstrip()
-
-            logger.info("Successfully processed rewrite mode response")
-            return documented_code, usage
+            return content, usage
 
         elif mode == "inject":
-            if not hasattr(response.choices[0], "message"):
-                logger.error("Invalid API response: missing message")
-                raise AIDocifyError("Invalid API response: missing message")
-
-            tool_calls = response.choices[0].message.tool_calls
-
-            if not tool_calls:
-                logger.error("Model did not return any valid tool calls")
+            msg = response.choices[0].message
+            if not msg.tool_calls:
                 raise AIDocifyError("Model did not return any valid tool calls")
 
             docstring_map: Dict[str, str] = {}
-            try:
-                for tool_call in tool_calls:
-                    if tool_call.function.name != "generate_one_docstring":
-                        logger.warning(
-                            "Unexpected tool call name: %s", tool_call.function.name
-                        )
-                        continue
-
+            for tool_call in msg.tool_calls:
+                if tool_call.function.name == "generate_one_docstring":
                     args = json.loads(tool_call.function.arguments)
+                    if args.get("name") and args.get("body"):
+                        docstring_map[args["name"]] = args["body"]
 
-                    name = args.get("name")
-                    body = args.get("body")
+            if not docstring_map:
+                raise AIDocifyError("No valid docstrings were generated")
 
-                    if not name:
-                        logger.warning("Missing 'name' in tool call arguments")
-                        continue
+            final_code = insert_docstrings_to_source(file_content, docstring_map)
+            return final_code, usage
 
-                    if not body:
-                        logger.warning(
-                            "Missing 'body' in tool call arguments for %s", name
-                        )
-                        continue
-
-                    docstring_map[name] = body
-                    logger.info("Processed docstring for: %s", name)
-
-                if not docstring_map:
-                    logger.error("No valid docstrings were generated")
-                    raise AIDocifyError("No valid docstrings were generated")
-
-                try:
-                    final_code = insert_docstrings_to_source(
-                        file_content, docstring_map
-                    )
-                    logger.info(
-                        "Successfully injected %d docstrings", len(docstring_map)
-                    )
-                    return final_code, usage
-                except Exception as e:
-                    logger.error("Error inserting docstrings: %s", e)
-                    raise AIDocifyError(f"Error inserting docstrings: {e}") from e
-
-            except json.JSONDecodeError as e:
-                logger.error("Failed to decode AI JSON response: %s", e)
-                raise AIDocifyError(f"Failed to decode AI JSON response: {e}") from e
-            except (AttributeError, TypeError) as e:
-                logger.error("Malformed tool call arguments: %s", e)
-                raise AIDocifyError(f"Malformed tool call arguments: {e}") from e
-            except KeyError as e:
-                logger.error("Missing required key in tool arguments: %s", e)
-                raise AIDocifyError(
-                    f"Missing required key in tool arguments: {e}"
-                ) from e
-            except Exception as e:
-                logger.error("Unexpected error in inject mode: %s", e)
-                raise AIDocifyError(f"Unexpected error in inject mode: {e}") from e
-
-    except OpenAIError as e:
-        logger.error("OpenAI API error: %s", e)
-        raise AIDocifyError(f"OpenAI API error: {e}") from e
-    except AIDocifyError:
-        # Re-raise AIDocifyError without wrapping to preserve the original
-        raise
     except Exception as e:
         logger.error("Unexpected error: %s", e)
-        raise AIDocifyError(f"Unexpected error: {e}") from e
+        raise AIDocifyError(f"{e}") from e

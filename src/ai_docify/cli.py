@@ -14,6 +14,7 @@ to perform the core AI and pricing work.
 
 import os
 import sys
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 import click
@@ -270,6 +271,11 @@ def main(
     None
         The function performs I/O and prints status; it does not return a value.
     """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
     console = Console()
 
     try:
