@@ -3,6 +3,7 @@ from click.testing import CliRunner
 from unittest.mock import patch, MagicMock
 
 from src.ai_docify.cli import main
+from src.ai_docify.generator import AIDocifyError
 
 @pytest.fixture
 def runner():
@@ -117,14 +118,14 @@ def test_cli_api_error(
     mock_validate.return_value = True
     mock_estimate.return_value = {"tokens": 100, "input_cost": 0.001, "currency": "USD"}
     mock_prompt.return_value = True
-    mock_generate.return_value = ("Error: API is down", {})
+    mock_generate.side_effect = AIDocifyError("API is down")
 
     result = runner.invoke(
         main,
         [mock_file, "--provider", "openai", "--model", "gpt-4", "--yes"],
     )
 
-    assert result.exit_code == 0
-    assert "Error: API is down" in result.output
+    assert result.exit_code == 1
+    assert "Error generating documentation: API is down" in result.output
     assert "Successfully generated documentation!" not in result.output
     assert "Final Usage Report" not in result.output

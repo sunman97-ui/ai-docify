@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from openai import OpenAIError
 
 # Using the requested import path
-from src.ai_docify.generator import generate_documentation
+from src.ai_docify.generator import generate_documentation, AIDocifyError
 
 @pytest.fixture
 def mock_console():
@@ -53,15 +53,14 @@ def test_generate_documentation_openai_connection(mock_openai, mock_console):
 
 def test_generate_documentation_missing_api_key(mock_console):
     """Test error when API key is missing for non-Ollama provider."""
-    result, usage = generate_documentation(
-        file_content="pass",
-        provider="openai",
-        model="gpt-4",
-        api_key=None,
-        console=mock_console
-    )
-    assert result == "Error: OPENAI_API_KEY is not set."
-    assert usage == {}
+    with pytest.raises(AIDocifyError, match="API key is required for OpenAI"):
+        generate_documentation(
+            file_content="pass",
+            provider="openai",
+            model="gpt-4",
+            api_key=None,
+            console=mock_console
+        )
 
 @patch("src.ai_docify.generator.OpenAI")
 def test_generate_documentation_rewrite_success(mock_openai, mock_console):
@@ -137,13 +136,11 @@ def test_generate_documentation_api_error(mock_openai, mock_console):
     mock_client = mock_openai.return_value
     mock_client.chat.completions.create.side_effect = OpenAIError("API Down")
 
-    result, usage = generate_documentation(
-        file_content="pass",
-        provider="openai",
-        model="gpt-4",
-        api_key="sk-test",
-        console=mock_console
-    )
-
-    assert "Error from API" in result
-    assert usage == {}
+    with pytest.raises(AIDocifyError, match="API error: API Down"):
+        generate_documentation(
+            file_content="pass",
+            provider="openai",
+            model="gpt-4",
+            api_key="sk-test",
+            console=mock_console
+        )

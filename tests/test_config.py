@@ -6,7 +6,9 @@ from src.ai_docify.config.config import (
     load_config,
     validate_model,
     get_model_price,
+    DEFAULT_CONFIG,
 )
+
 
 # --- Test Data ---
 MOCK_CONFIG = {
@@ -34,10 +36,10 @@ def test_load_config_success(mock_path):
 
 @patch("src.ai_docify.config.config.CONFIG_PATH")
 def test_load_config_file_not_found(mock_path):
-    """Test that FileNotFoundError is raised if config file does not exist."""
+    """Test that default config is returned if config file does not exist."""
     mock_path.exists.return_value = False
-    with pytest.raises(FileNotFoundError):
-        load_config()
+    config = load_config()
+    assert config == DEFAULT_CONFIG
 
 # --- Tests for validate_model ---
 
