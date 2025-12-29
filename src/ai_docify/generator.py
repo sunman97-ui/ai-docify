@@ -1,3 +1,12 @@
+"""
+Utilities for generating or injecting docstrings into Python source code using an LLM.
+
+This module provides a single high-level function, generate_documentation, which
+communicates with an OpenAI-compatible API (including local Ollama instances)
+to either rewrite an entire file with added documentation or to generate and
+inject docstrings for individual symbols using a tool schema.
+"""
+
 import json
 from typing import Tuple, Dict, Any
 from openai import OpenAI, OpenAIError
@@ -6,9 +15,11 @@ from .builder import build_messages
 from .strategies import DOCSTRING_TOOL_SCHEMA
 from .tools import insert_docstrings_to_source
 
+# --- Global Console ---
 console = Console()
 
 
+# --- Public API ---
 def generate_documentation(
     file_content: str,
     provider: str,
@@ -17,10 +28,33 @@ def generate_documentation(
     mode: str = "rewrite",
 ) -> Tuple[str, Dict[str, Any]]:
     """
-    Generates documentation based on the selected mode.
-    Returns: (final_code_content, usage_dict)
+    Generate documentation for Python source either by rewriting the file or by
+    injecting generated docstrings.
+
+    Parameters
+    ----------
+    file_content : str
+        The full source code of the Python file to document.
+    provider : str
+        The provider identifier, e.g., "ollama" for local Ollama or other for OpenAI.
+    model : str
+        The model name to request from the provider.
+    api_key : str | None
+        The API key for remote providers. Use None for local providers like Ollama.
+    mode : str, optional
+        Operation mode; either "rewrite" to return a rewritten file with
+        documentation or "inject" to insert docstrings into existing code.
+        Default is "rewrite".
+
+    Returns
+    -------
+    Tuple[str, Dict[str, Any]]
+        A tuple with the first element being either the documented code (str) or
+        an error message (str), and the second being a usage dictionary with keys
+        "input_tokens", "output_tokens", and "reasoning_tokens" (values are ints).
     """
     try:
+        # --- Client Initialization ---
         if provider == "ollama":
             client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
             console.print(f"Connecting to local Ollama with model [cyan]{model}[/]...")
@@ -47,25 +81,35 @@ def generate_documentation(
         response = client.chat.completions.create(**kwargs)
 
         # --- USAGE EXTRACTION ---
-        usage = {"input_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0}
+        usage: Dict[str, int] = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0,
+        }
         if response.usage:
             usage["input_tokens"] = response.usage.prompt_tokens
             usage["output_tokens"] = response.usage.completion_tokens
+            # completion_tokens_details may be either a dict or an object with attributes
             if hasattr(response.usage, "completion_tokens_details"):
                 details = response.usage.completion_tokens_details
+                # If dict-like, prefer dict access; otherwise attribute access.
                 if isinstance(details, dict):
                     usage["reasoning_tokens"] = details.get("reasoning_tokens", 0)
                 else:
                     usage["reasoning_tokens"] = getattr(details, "reasoning_tokens", 0)
 
         # --- RESPONSE HANDLING ---
-
         if mode == "rewrite":
             documented_code = response.choices[0].message.content
+
+            # Trim fenced code blocks if present.
             if documented_code.startswith("```python"):
+                # remove the opening fence and any leading whitespace/newline
                 documented_code = documented_code[len("```python") :].lstrip()
             if documented_code.endswith("```"):
+                # remove the closing fence and any trailing whitespace/newline
                 documented_code = documented_code[: -len("```")].rstrip()
+
             return documented_code, usage
 
         elif mode == "inject":
@@ -74,7 +118,7 @@ def generate_documentation(
             if not tool_calls:
                 return "Error: Model did not return any valid tool calls.", usage
 
-            docstring_map = {}
+            docstring_map: Dict[str, str] = {}
             try:
                 for tool_call in tool_calls:
                     if tool_call.function.name != "generate_one_docstring":

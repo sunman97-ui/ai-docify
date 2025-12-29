@@ -15,6 +15,7 @@
 - **💰 Cost-Aware Design**: Unlike other tools, `ai-docify` calculates and displays the **estimated input token cost** via `tiktoken` *before* you spend a penny.
 - **🔒 Privacy-First**: Switch seamlessly between **OpenAI** (Cloud) and **Ollama** (Local) with a single flag. Keep proprietary code on your machine when needed.
 - **🛡️ Non-Destructive**: Your original files are never touched. Documented code is safely written to a dedicated `ai_output/` directory.
+- **✌️ Dual Generation Modes**: Choose between `rewrite` for speed and economy, or `inject` for surgical precision that preserves 100% of your original code formatting.
 - **⚡ "Lean" Templates**: Optimized prompts ensure high-quality documentation without wasting tokens on unnecessary conversational fluff.
 - **⚙️ Future-Proof Config**: Easily add support for new models (e.g., GPT-6, Llama-4) just by updating the `pricing.json` configuration file.
 
@@ -79,12 +80,36 @@ OPENAI_API_KEY=sk-your-api-key-here
 
 The CLI requires you to specify the **Provider** and the **Model** explicitly to prevent accidental costs.
 
+### Choosing Your Mode: `rewrite` vs. `inject`
+
+`ai-docify` offers two distinct documentation strategies.
+
+#### `rewrite` (Default Mode)
+
+*Best for speed, economy, and general use.*
+
+This mode asks the AI to rewrite the entire file, adding comprehensive documentation. It is the most cost-effective and reliable method for achieving full documentation coverage.
+
+```bash
+ai-docify my_script.py --provider openai --model gpt-5-mini --mode rewrite
+```
+
+#### `inject` Mode
+
+*Best for surgical precision and preserving formatting.*
+
+This mode intelligently injects docstrings without altering any other part of your code—including formatting and comments. It is the ideal choice for projects with strict linting rules or when you only want to add documentation without any other changes. This precision comes at a slightly higher token cost.
+
+```bash
+ai-docify my_script.py --provider openai --model gpt-5-mini --mode inject
+```
+
 ### 1. Using OpenAI (Cloud)
 
 *Best for: High accuracy, complex logic, and standard pricing.*
 
 ```bash
-ai-docify my_script.py --provider openai --model gpt-5-nano
+ai-docify my_script.py --provider openai --model gpt-5-nano --mode inject
 
 ```
 
@@ -94,7 +119,7 @@ ai-docify my_script.py --provider openai --model gpt-5-nano
 
 ```bash
 # Ensure you have pulled the model first: ollama pull llama3.1:8b
-ai-docify my_script.py --provider ollama --model llama3.1:8b
+ai-docify my_script.py --provider ollama --model llama3.1:8b --mode rewrite
 
 ```
 

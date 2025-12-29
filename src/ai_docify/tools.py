@@ -1,10 +1,42 @@
+"""
+Utilities to safely insert or replace docstrings in Python source code using
+the AST module. Provides functionality to remove existing docstrings and
+insert new, well-indented docstring blocks for module-level and function-level
+definitions based on a mapping from names to docstring text. The primary
+consumer function parses the source into an AST, identifies existing docstring
+nodes to remove, and schedules well-formatted insertions without shifting line
+indices prematurely.
+"""
+
 import ast
 
 
 def insert_docstrings_to_source(original_source: str, docstring_map: dict) -> str:
     """
-    Parses source, removes old docstrings, and inserts new ones safely using AST.
-    Returns the modified source code string.
+    Parse a Python source string, remove existing docstrings, and insert new
+    docstrings from a provided mapping using the AST module.
+
+    Parameters
+    ----------
+    original_source : str
+        The full Python source code to modify. This should be a single string
+        containing one or more module-level and function definitions. The function
+        will return the original string unchanged if the source cannot be parsed
+        as valid Python.
+
+    docstring_map : dict
+        A mapping from target names to docstring text. The special key
+        "__module__" (str) is used for the module-level docstring; other keys
+        should match function names (str) present in the source. Values are raw
+        docstring text (str) which may or may not already include surrounding
+        triple quotes; the implementation will clean and reformat them.
+
+    Returns
+    -------
+    str
+        The modified source code with old docstrings removed and new docstrings
+        inserted. If the original source is syntactically invalid, the original
+        source string is returned unchanged.
     """
     lines = original_source.splitlines(keepends=True)
     try:
@@ -18,6 +50,29 @@ def insert_docstrings_to_source(original_source: str, docstring_map: dict) -> st
 
     # --- HELPER: Docstring Cleanup ---
     def clean_docstring(raw_text: str, indent_level: int) -> str:
+        """
+        Format raw docstring text into a properly indented triple-quoted block suitable
+        for insertion into source code.
+
+        Parameters
+        ----------
+        raw_text : str
+            The raw docstring content to format. This may already include surrounding
+            triple quotes (single or double); if so, the surrounding quotes will be
+            removed before reformatting.
+
+        indent_level : int
+            The number of spaces to prefix each non-empty line of the formatted
+            docstring with. This should match the indentation of the surrounding
+            code block (for example, 4 for a standard function body).
+
+        Returns
+        -------
+        str
+            A string containing the cleaned and formatted docstring block, including
+            opening and closing triple quotes and terminating newlines. The returned
+            block is ready to be inserted into the source code at the chosen index.
+        """
         indent = " " * indent_level
         cleaned = raw_text.strip()
 

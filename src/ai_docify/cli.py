@@ -1,17 +1,177 @@
+"""
+CLI tool to generate NumPy/Sphinx style docstrings for Python source files.
+
+This module provides a Click-based command line interface that:
+- Validates model/provider configuration.
+- Estimates token usage and cost.
+- Optionally prompts the user for confirmation.
+- Calls the documentation generator and writes the result to ai_output/.
+- Prints a final usage/cost report.
+
+The script relies on the local project's generator, utils, and config modules
+to perform the core AI and pricing work.
+"""
+
 import os
 import sys
 from pathlib import Path
+from typing import Any, Dict
 import click
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.prompt import Confirm
-from dotenv import load_dotenv
+
 from .generator import generate_documentation
 from .utils import estimate_cost
-from .config import validate_model, get_model_price
+from .config import get_model_price, validate_model
 
 load_dotenv()
 
 
+# --- File I/O Helpers ---
+def read_file(filepath: str) -> str:
+    """
+    Read the contents of a file as UTF-8 text.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the file to read.
+
+    Returns
+    -------
+    str
+        The file contents.
+    """
+    path_obj = Path(filepath)
+    with path_obj.open("r", encoding="utf-8") as f:
+        return f.read()
+
+
+def write_output_file(output_dir: Path, filename: str, content: str) -> Path:
+    """
+    Write content to a file inside an output directory, ensuring the directory exists.
+
+    Parameters
+    ----------
+    output_dir : pathlib.Path
+        Directory where the output file will be written.
+    filename : str
+        The filename to write inside output_dir.
+    content : str
+        The content to write to the file.
+
+    Returns
+    -------
+    pathlib.Path
+        The full path to the written file.
+    """
+    output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / filename
+    with output_path.open("w", encoding="utf-8") as f:
+        f.write(content)
+    return output_path
+
+
+# --- Console Helpers ---
+def print_estimation(console: Console, estimates: Dict[str, Any]) -> None:
+    """
+    Print a pre-flight estimation of tokens and cost.
+
+    Parameters
+    ----------
+    console : rich.console.Console
+        Console object to print to.
+    estimates : dict
+        Estimation dictionary returned from estimate_cost().
+
+    Returns
+    -------
+    None
+        This function prints to the console and returns nothing.
+    """
+    console.print("\n📊 [bold]Estimation (Input Only):[/bold]")
+    console.print(f"   Tokens: [cyan]{estimates.get('tokens')}[/]")
+
+    if estimates.get("currency") == "USD":
+        console.print(f"   Est. Cost: [green]${estimates.get('input_cost', 0):.5f}[/]")
+    else:
+        console.print("   Est. Cost: [bold blue]Free (Local/Ollama)[/]")
+
+
+def prompt_confirmation(console: Console) -> bool:
+    """
+    Prompt the user for confirmation using a yes/no dialog.
+
+    Parameters
+    ----------
+    console : rich.console.Console
+        Console object to use for prompting.
+
+    Returns
+    -------
+    bool
+        True if the user confirmed, False otherwise.
+    """
+    console.print("")
+    return Confirm.ask("Do you want to proceed?")
+
+
+def print_final_usage_report(
+    console: Console, usage_stats: Dict[str, int], provider: str, model: str
+) -> None:
+    """
+    Print the final usage report with token counts and estimated cost.
+
+    Parameters
+    ----------
+    console : rich.console.Console
+        Console object to print to.
+    usage_stats : dict
+        Dictionary with keys 'input_tokens', 'output_tokens', 'reasoning_tokens'.
+    provider : str
+        Provider name used for pricing lookup.
+    model : str
+        Model name used for pricing lookup.
+
+    Returns
+    -------
+    None
+        This function prints the final usage and cost report to the console.
+    """
+    price_info = get_model_price(provider, model)
+    input_price = price_info.get("input_cost_per_million", 0)
+    output_price = price_info.get("output_cost_per_million", 0)
+
+    in_tokens = usage_stats.get("input_tokens", 0)
+    out_tokens = usage_stats.get("output_tokens", 0)
+    reasoning_tokens = usage_stats.get("reasoning_tokens", 0)
+
+    total_cost = 0.0
+    console.print("\n📉 [bold]Final Usage Report:[/bold]")
+
+    if input_price > 0:
+        # Calculate costs per-million-token rates
+        input_cost = (in_tokens / 1_000_000) * input_price
+        output_cost = (out_tokens / 1_000_000) * output_price
+        total_cost = input_cost + output_cost
+
+        console.print(f"   Input Tokens:     [cyan]{in_tokens}[/]")
+        console.print(f"   Output Tokens:    [cyan]{out_tokens}[/]")
+
+        if reasoning_tokens > 0:
+            console.print(
+                f"   (Includes [yellow]{reasoning_tokens}[/] reasoning tokens)"
+            )
+
+        console.print(f"   Total Cost:       [bold green]${total_cost:.5f}[/]")
+    else:
+        # Local or free providers: only show tokens and Free
+        console.print(f"   Output Tokens: [cyan]{out_tokens}[/]")
+        console.print("   Total Cost:    [bold blue]Free[/]")
+
+
+# --- CLI Entry Point ---
 @click.command()
 @click.argument("filepath", type=click.Path(exists=True, dir_okay=False, readable=True))
 @click.option(
@@ -36,13 +196,44 @@ load_dotenv()
     ),
 )
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-def main(filepath, provider, model, mode, yes):
+def main(filepath: str, provider: str, model: str, mode: str, yes: bool) -> None:
     """
-    Generates NumPy/Sphinx style docstrings for a Python file.
+    Generate NumPy/Sphinx style docstrings for a Python file via an AI model.
+
+    Parameters
+
+    ----------
+
+    filepath : str
+        Path to the Python file to document.
+
+    provider : str
+        AI provider name (e.g., 'openai', 'ollama').
+
+    model : str
+        Model name as configured in pricing.json.
+
+    mode : str
+        Operation mode, either 'rewrite' or 'inject'.
+
+    yes : bool
+        If True, skip the confirmation prompt and proceed automatically.
+
+    EXAMPLE USAGE:
+
+    --------------
+
+    ai-docify src/my_script.py --provider openai --model gpt-5-mini --mode rewrite
+
+    \f
+    Returns
+    -------
+    None
+        The function performs I/O and prints status; it does not return a value.
     """
     console = Console()
 
-    # 1. Validate Configuration
+    # --- 1. Validate Configuration ---
     if not validate_model(provider, model):
         console.print(
             f"[bold red]Error:[/bold red] Model '[cyan]{model}[/]'"
@@ -57,89 +248,53 @@ def main(filepath, provider, model, mode, yes):
     )
 
     try:
-        path_obj = Path(filepath)
-        with open(path_obj, "r", encoding="utf-8") as f:
-            original_content = f.read()
+        # --- 2. Read file content ---
+        original_content = read_file(filepath)
 
-        # 2. Cost Estimation (Pre-Flight)
-        # PASS THE MODE HERE
+        # --- 3. Cost Estimation (Pre-Flight) ---
+        # Pass the selected mode to the estimator
+        # so it can account for mode-specific tokens.
         estimates = estimate_cost(original_content, provider, model, mode=mode)
-        console.print("\n📊 [bold]Estimation (Input Only):[/bold]")
-        console.print(f"   Tokens: [cyan]{estimates['tokens']}[/]")
+        print_estimation(console, estimates)
 
-        if estimates["currency"] == "USD":
-            console.print(f"   Est. Cost: [green]${estimates['input_cost']:.5f}[/]")
-        else:
-            console.print("   Est. Cost: [bold blue]Free (Local/Ollama)[/]")
-
-        # 3. Confirmation
+        # --- 4. Confirmation ---
         if not yes:
-            console.print("")
-            if not Confirm.ask("Do you want to proceed?"):
+            if not prompt_confirmation(console):
                 console.print("[yellow]Aborted by user.[/]")
                 return
 
-        # 4. Generate documentation
+        # --- 5. Generate documentation ---
         api_key = os.getenv("OPENAI_API_KEY")
 
         with console.status(
             f"Generating docs using [cyan]{model}[/]...", spinner="dots"
         ):
-            # UNPACK THE TUPLE
+            # generate_documentation returns (documented_content, usage_stats)
             documented_content, usage_stats = generate_documentation(
                 file_content=original_content,
                 provider=provider,
                 model=model,
                 api_key=api_key,
-                mode=mode,  # PASS THE MODE
+                mode=mode,
             )
 
-        if documented_content.startswith("Error"):
+        if isinstance(documented_content, str) and documented_content.startswith(
+            "Error"
+        ):
             console.print(f"[bold red]{documented_content}[/]")
             return
 
-        # 5. Write to 'ai_output' folder
+        # --- 6. Write output to 'ai_output' folder ---
+        path_obj = Path(filepath)
         output_dir = Path("ai_output")
-        output_dir.mkdir(exist_ok=True)
-
         output_filename = f"{path_obj.stem}.doc.py"
-        output_path = output_dir / output_filename
-
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(documented_content)
+        output_path = write_output_file(output_dir, output_filename, documented_content)
 
         console.print("\n✅ Successfully generated documentation!")
         console.print(f"   Output saved to: [bold yellow]{output_path}[/]")
 
-        # 6. Final Usage Report (Post-Flight)
-        price_info = get_model_price(provider, model)
-        input_price = price_info.get("input_cost_per_million", 0)
-        output_price = price_info.get("output_cost_per_million", 0)
-
-        in_tokens = usage_stats.get("input_tokens", 0)
-        out_tokens = usage_stats.get("output_tokens", 0)
-        reasoning_tokens = usage_stats.get("reasoning_tokens", 0)
-
-        total_cost = 0.0
-        if input_price > 0:
-            input_cost = (in_tokens / 1_000_000) * input_price
-            output_cost = (out_tokens / 1_000_000) * output_price
-            total_cost = input_cost + output_cost
-
-            console.print("\n📉 [bold]Final Usage Report:[/bold]")
-            console.print(f"   Input Tokens:     [cyan]{in_tokens}[/]")
-            console.print(f"   Output Tokens:    [cyan]{out_tokens}[/]")
-
-            if reasoning_tokens > 0:
-                console.print(
-                    f"   (Includes [yellow]{reasoning_tokens}[/] reasoning tokens)"
-                )
-
-            console.print(f"   Total Cost:       [bold green]${total_cost:.5f}[/]")
-        else:
-            console.print("\n📉 [bold]Final Usage Report:[/bold]")
-            console.print(f"   Output Tokens: [cyan]{out_tokens}[/]")
-            console.print("   Total Cost:    [bold blue]Free[/]")
+        # --- 7. Final Usage Report (Post-Flight) ---
+        print_final_usage_report(console, usage_stats, provider, model)
 
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred in the CLI: {e}[/]")
