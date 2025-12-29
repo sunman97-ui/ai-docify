@@ -15,13 +15,13 @@ to perform the core AI and pricing work.
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import click
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.prompt import Confirm
 
-from .generator import generate_documentation
+from .generator import generate_documentation, AIDocifyError
 from .utils import estimate_cost, calculate_token_cost
 from .config import get_model_price, validate_model
 
@@ -77,6 +77,32 @@ def write_output_file(output_dir: Path, filename: str, content: str) -> Path:
         return output_path
     except OSError as e:
         raise IOError(f"Failed to write file {output_path}: {e}") from e
+
+
+# --- Secure API Key Handling ---
+def get_api_key(provider: str) -> Optional[str]:
+    """
+    Securely retrieve API key for the specified provider.
+
+    Parameters
+    ----------
+    provider : str
+        The provider name to get the API key for.
+
+    Returns
+    -------
+    Optional[str]
+        The API key if found, None otherwise.
+    """
+    if provider.lower() == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return None
+        return api_key
+    elif provider.lower() == "ollama":
+        # Ollama is local, no API key needed
+        return "ollama"
+    return None
 
 
 # --- Console Helpers ---
@@ -145,35 +171,38 @@ def print_final_usage_report(
     None
         This function prints the final usage and cost report to the console.
     """
-    price_info = get_model_price(provider, model)
-    input_price = price_info.get("input_cost_per_million", 0)
-    output_price = price_info.get("output_cost_per_million", 0)
+    try:
+        price_info = get_model_price(provider, model)
+        input_price = price_info.get("input_cost_per_million", 0)
+        output_price = price_info.get("output_cost_per_million", 0)
 
-    in_tokens = usage_stats.get("input_tokens", 0)
-    out_tokens = usage_stats.get("output_tokens", 0)
-    reasoning_tokens = usage_stats.get("reasoning_tokens", 0)
+        in_tokens = usage_stats.get("input_tokens", 0)
+        out_tokens = usage_stats.get("output_tokens", 0)
+        reasoning_tokens = usage_stats.get("reasoning_tokens", 0)
 
-    total_cost = 0.0
-    console.print("\n📉 [bold]Final Usage Report:[/bold]")
+        total_cost = 0.0
+        console.print("\n📉 [bold]Final Usage Report:[/bold]")
 
-    if input_price > 0:
-        input_cost = calculate_token_cost(in_tokens, input_price)
-        output_cost = calculate_token_cost(out_tokens, output_price)
-        total_cost = input_cost + output_cost
+        if input_price > 0:
+            input_cost = calculate_token_cost(in_tokens, input_price)
+            output_cost = calculate_token_cost(out_tokens, output_price)
+            total_cost = input_cost + output_cost
 
-        console.print(f"   Input Tokens:     [cyan]{in_tokens}[/]")
-        console.print(f"   Output Tokens:    [cyan]{out_tokens}[/]")
+            console.print(f"   Input Tokens:     [cyan]{in_tokens}[/]")
+            console.print(f"   Output Tokens:    [cyan]{out_tokens}[/]")
 
-        if reasoning_tokens > 0:
-            console.print(
-                f"   (Includes [yellow]{reasoning_tokens}[/] reasoning tokens)"
-            )
+            if reasoning_tokens > 0:
+                console.print(
+                    f"   (Includes [yellow]{reasoning_tokens}[/] reasoning tokens)"
+                )
 
-        console.print(f"   Total Cost:       [bold green]${total_cost:.5f}[/]")
-    else:
-        # Local or free providers: only show tokens and Free
-        console.print(f"   Output Tokens: [cyan]{out_tokens}[/]")
-        console.print("   Total Cost:    [bold blue]Free[/]")
+            console.print(f"   Total Cost:       [bold green]${total_cost:.5f}[/]")
+        else:
+            # Local or free providers: only show tokens and Free
+            console.print(f"   Output Tokens: [cyan]{out_tokens}[/]")
+            console.print("   Total Cost:    [bold blue]Free[/]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not generate usage report: {e}[/]")
 
 
 # --- CLI Entry Point ---
@@ -201,7 +230,12 @@ def print_final_usage_report(
     ),
 )
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-def main(filepath: str, provider: str, model: str, mode: str, yes: bool) -> None:
+@click.option(
+    "--output-dir", default="ai_output", help="Directory to save output files."
+)
+def main(
+    filepath: str, provider: str, model: str, mode: str, yes: bool, output_dir: str
+) -> None:
     """
     Generate NumPy/Sphinx style docstrings for a Python file via an AI model.
 
@@ -238,29 +272,40 @@ def main(filepath: str, provider: str, model: str, mode: str, yes: bool) -> None
     """
     console = Console()
 
-    # --- 1. Validate Configuration ---
-    if not validate_model(provider, model):
-        console.print(
-            f"[bold red]Error:[/bold red] Model '[cyan]{model}[/]'"
-            f"' is not configured for provider '[cyan]{provider}[/]'"
-            f" in your pricing.json."
-        )
-        sys.exit(1)
-
-    console.print(
-        f"🤖 [bold green]ai-docify[/]: Checking [cyan]{filepath}[/]"
-        f" in [yellow]{mode.upper()}[/] mode"
-    )
-
     try:
+        # --- 1. Validate Configuration ---
+        if not validate_model(provider, model):
+            console.print(
+                f"[bold red]Error:[/bold red] Model '[cyan]{model}[/]'"
+                f"' is not configured for provider '[cyan]{provider}[/]'"
+                f" in your pricing.json."
+            )
+            sys.exit(1)
+
+        console.print(
+            f"🤖 [bold green]ai-docify[/]: Checking [cyan]{filepath}[/]"
+            f" in [yellow]{mode.upper()}[/] mode"
+        )
+
         # --- 2. Read file content ---
-        original_content = read_file(filepath)
+        try:
+            original_content = read_file(filepath)
+        except IOError as e:
+            console.print(f"[bold red]Error reading file:[/] {e}")
+            sys.exit(1)
 
         # --- 3. Cost Estimation (Pre-Flight) ---
-        # Pass the selected mode to the estimator
-        # so it can account for mode-specific tokens.
-        estimates = estimate_cost(original_content, provider, model, mode=mode)
-        print_estimation(console, estimates)
+        try:
+            # Pass the selected mode to the estimator
+            # so it can account for mode-specific tokens.
+            estimates = estimate_cost(original_content, provider, model, mode=mode)
+            print_estimation(console, estimates)
+        except Exception as e:
+            console.print(f"[bold yellow]Warning: Could not estimate cost: {e}[/]")
+            if not yes:
+                if not prompt_confirmation(console):
+                    console.print("[yellow]Aborted by user.[/]")
+                    return
 
         # --- 4. Confirmation ---
         if not yes:
@@ -269,40 +314,53 @@ def main(filepath: str, provider: str, model: str, mode: str, yes: bool) -> None
                 return
 
         # --- 5. Generate documentation ---
-        api_key = os.getenv("OPENAI_API_KEY")
+        # Secure API key handling
+        api_key = get_api_key(provider)
+        if provider.lower() == "openai" and not api_key:
+            console.print(
+                "[bold red]Error: OPENAI_API_KEY environment variable is not set.[/]"
+            )
+            sys.exit(1)
+
+        output_dir_path = Path(output_dir)
 
         with console.status(
             f"Generating docs using [cyan]{model}[/]...", spinner="dots"
         ):
-            # generate_documentation returns (documented_content, usage_stats)
-            documented_content, usage_stats = generate_documentation(
-                file_content=original_content,
-                provider=provider,
-                model=model,
-                api_key=api_key,
-                mode=mode,
+            try:
+                # generate_documentation returns (documented_content, usage_stats)
+                documented_content, usage_stats = generate_documentation(
+                    file_content=original_content,
+                    provider=provider,
+                    model=model,
+                    api_key=api_key,
+                    mode=mode,
+                    console=console,
+                )
+            except AIDocifyError as e:
+                console.print(f"[bold red]Error generating documentation: {e}[/]")
+                sys.exit(1)
+
+        # --- 6. Write output to output directory ---
+        try:
+            path_obj = Path(filepath)
+            output_filename = f"{path_obj.stem}.doc.py"
+            output_path = write_output_file(
+                output_dir_path, output_filename, documented_content
             )
 
-        if isinstance(documented_content, str) and documented_content.startswith(
-            "Error"
-        ):
-            console.print(f"[bold red]{documented_content}[/]")
-            return
-
-        # --- 6. Write output to 'ai_output' folder ---
-        path_obj = Path(filepath)
-        output_dir = Path("ai_output")
-        output_filename = f"{path_obj.stem}.doc.py"
-        output_path = write_output_file(output_dir, output_filename, documented_content)
-
-        console.print("\n✅ Successfully generated documentation!")
-        console.print(f"   Output saved to: [bold yellow]{output_path}[/]")
+            console.print("\n✅ Successfully generated documentation!")
+            console.print(f"   Output saved to: [bold yellow]{output_path}[/]")
+        except IOError as e:
+            console.print(f"[bold red]Error writing output file: {e}[/]")
+            sys.exit(1)
 
         # --- 7. Final Usage Report (Post-Flight) ---
         print_final_usage_report(console, usage_stats, provider, model)
 
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred in the CLI: {e}[/]")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

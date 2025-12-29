@@ -9,10 +9,25 @@ identifiers (lowercased) to per-model pricing dictionaries.
 """
 
 import json
+import logging
 from pathlib import Path
+from rich.console import Console
 
 # Since this file is IN the config folder, we just look in the same directory
 CONFIG_PATH = Path(__file__).parent / "pricing.json"
+
+# Get a module-specific logger
+logger = logging.getLogger(__name__)
+
+# Default minimal configuration for fallback
+DEFAULT_CONFIG = {
+    "openai": {
+        "gpt-5-mini": {"input_cost_per_million": 0.25, "output_cost_per_million": 2.0}
+    },
+    "ollama": {
+        "llama3.1:8b": {"input_cost_per_million": 0.0, "output_cost_per_million": 0.0}
+    },
+}
 
 
 def load_config() -> dict:
@@ -29,13 +44,37 @@ def load_config() -> dict:
     dict
         Parsed JSON configuration as a mapping from provider keys (str) to their
         pricing data (dict). If the pricing.json file is missing, this function
-        will raise a FileNotFoundError.
+        will use a minimal default configuration.
     """
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError(f"Configuration file not found at: {CONFIG_PATH}")
+    console = Console()
 
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    if not CONFIG_PATH.exists():
+        logger.warning(
+            "Configuration file not found at: %s. Using default configuration.",
+            CONFIG_PATH,
+        )
+        console.print(f"[yellow]Warning: pricing.json not found at {CONFIG_PATH}.[/]")
+        console.print(
+            "[yellow]Using minimal default configuration. "
+            "Please create a proper config file for production use.[/]"
+        )
+        return DEFAULT_CONFIG
+
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+            logger.info("Successfully loaded configuration from %s", CONFIG_PATH)
+            return config
+    except json.JSONDecodeError as e:
+        logger.error("Invalid JSON in configuration file: %s", e)
+        console.print(f"[red]Error: Invalid JSON in pricing.json: {e}[/]")
+        console.print("[yellow]Using default configuration as fallback.[/]")
+        return DEFAULT_CONFIG
+    except Exception as e:
+        logger.error("Error loading configuration: %s", e)
+        console.print(f"[red]Error loading pricing.json: {e}[/]")
+        console.print("[yellow]Using default configuration as fallback.[/]")
+        return DEFAULT_CONFIG
 
 
 def validate_model(provider: str, model: str) -> bool:
@@ -58,15 +97,25 @@ def validate_model(provider: str, model: str) -> bool:
         True if the provider exists in the configuration and the specified
         model is present for that provider; otherwise False.
     """
-    config = load_config()
-    # Handle case-insensitivity safely
-    provider_key = provider.lower() if provider else ""
-    provider_config = config.get(provider_key)
+    try:
+        config = load_config()
+        # Handle case-insensitivity safely
+        provider_key = provider.lower() if provider else ""
+        provider_config = config.get(provider_key)
 
-    if not provider_config:
+        if not provider_config:
+            logger.warning("Provider '%s' not found in configuration", provider_key)
+            return False
+
+        is_valid = model in provider_config
+        if not is_valid:
+            logger.warning(
+                "Model '%s' not found for provider '%s'", model, provider_key
+            )
+        return is_valid
+    except Exception as e:
+        logger.error("Error validating model: %s", e)
         return False
-
-    return model in provider_config
 
 
 def get_model_price(provider: str, model: str) -> dict:
@@ -88,6 +137,17 @@ def get_model_price(provider: str, model: str) -> dict:
         empty dict when either the provider or model is not present in the
         configuration.
     """
-    config = load_config()
-    provider_key = provider.lower() if provider else ""
-    return config.get(provider_key, {}).get(model, {})
+    try:
+        config = load_config()
+        provider_key = provider.lower() if provider else ""
+        model_price = config.get(provider_key, {}).get(model, {})
+
+        if not model_price:
+            logger.warning(
+                "No pricing information found for %s/%s", provider_key, model
+            )
+
+        return model_price
+    except Exception as e:
+        logger.error("Error retrieving model price: %s", e)
+        return {}

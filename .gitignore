@@ -41,3 +41,6 @@ Desktop.ini
 ai_output/
 my_test.py
 GEMINI.md
+
+# --- Logs ---
+*.log
