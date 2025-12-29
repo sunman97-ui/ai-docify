@@ -22,7 +22,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from .generator import generate_documentation
-from .utils import estimate_cost
+from .utils import estimate_cost, calculate_token_cost
 from .config import get_model_price, validate_model
 
 load_dotenv()
@@ -157,9 +157,8 @@ def print_final_usage_report(
     console.print("\n📉 [bold]Final Usage Report:[/bold]")
 
     if input_price > 0:
-        # Calculate costs per-million-token rates
-        input_cost = (in_tokens / 1_000_000) * input_price
-        output_cost = (out_tokens / 1_000_000) * output_price
+        input_cost = calculate_token_cost(in_tokens, input_price)
+        output_cost = calculate_token_cost(out_tokens, output_price)
         total_cost = input_cost + output_cost
 
         console.print(f"   Input Tokens:     [cyan]{in_tokens}[/]")

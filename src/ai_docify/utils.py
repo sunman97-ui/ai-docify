@@ -18,6 +18,27 @@ from .builder import build_messages
 from .strategies import DOCSTRING_TOOL_SCHEMA
 
 
+def calculate_token_cost(tokens: int, price_per_million: float) -> float:
+    """
+    Calculate the monetary cost for a given token count.
+
+    Parameters
+    ----------
+    tokens : int
+        Number of tokens.
+    price_per_million : float
+        Price per 1,000,000 tokens.
+
+    Returns
+    -------
+    float
+        Calculated cost in dollars. Returns 0.0 if price is <= 0.
+    """
+    if price_per_million <= 0:
+        return 0.0
+    return (tokens / 1_000_000) * price_per_million
+
+
 def estimate_cost(
     file_content: str,
     provider: str,
@@ -70,7 +91,7 @@ def estimate_cost(
     messages = build_messages(file_content, mode=mode)
 
     # Concatenate all message content for tokenization.
-    full_text = "".join(msg["content"] for msg in messages)
+    full_text: str = "".join(msg["content"] for msg in messages)
 
     # 2. Append tool schema when operating in "inject" mode to reflect the
     #    actual prompt sent to the LLM.
@@ -94,10 +115,7 @@ def estimate_cost(
     # ------------------------------------------------------------------------- #
     input_price: float = price_info.get("input_cost_per_million", 0.0)
 
-    estimated_cost: float = 0.0
-    if input_price > 0:
-        # Convert price per million tokens to price for the current prompt.
-        estimated_cost = (token_count / 1_000_000) * input_price
+    estimated_cost = calculate_token_cost(token_count, input_price)
 
     # ------------------------------------------------------------------------- #
     # --- Result Assembly ------------------------------------------------------ #
@@ -109,4 +127,4 @@ def estimate_cost(
     }
 
 
-__all__: list[str] = ["estimate_cost"]
+__all__: list[str] = ["estimate_cost", "calculate_token_cost"]

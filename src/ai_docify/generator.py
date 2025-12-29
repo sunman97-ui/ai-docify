@@ -8,6 +8,7 @@ inject docstrings for individual symbols using a tool schema.
 """
 
 import json
+import logging
 from typing import Tuple, Dict, Any, Optional
 from openai import OpenAI, OpenAIError
 from rich.console import Console
@@ -160,6 +161,12 @@ def generate_documentation(
                 return f"Error during inject mode processing: {e}", usage
 
     except OpenAIError as e:
-        return f"Error from API: {e}", {}
+        console.print(f"[bold red]API Error (details logged): {type(e).__name__}[/]")
+        logging.error(f"OpenAI API error: {e}")
+        return "Error from API: Check logs for details.", {}
     except Exception as e:
-        return f"An unexpected error occurred: {e}", {}
+        console.print(
+            f"[bold red]Unexpected error (details logged): {type(e).__name__}[/]"
+        )
+        logging.error(f"Unexpected error: {e}")
+        return "An unexpected error occurred: Check logs for details.", {}
