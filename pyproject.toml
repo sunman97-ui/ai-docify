@@ -1,0 +1,23 @@
+[project]
+name = "ai-docify"
+version = "0.1.0"
+description = "A simple CLI tool for generating safe, high-quality, NumPy/Sphinx style docstrings."
+requires-python = ">=3.8"
+dependencies = [
+    "click",
+    "openai",
+    "python-dotenv",
+    "rich",
+    "pytest",
+    "tiktoken"
+]
+
+[project.scripts]
+ai-docify = "ai_docify.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# CRITICAL: This ensures the JSON template is packaged with the code
+[tool.setuptools.package-data]
+ai_docify = ["templates/*.json", "config/*.json"]

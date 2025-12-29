@@ -1,0 +1,42 @@
+# --- Python Standard ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Environment Variables (Security Critical) ---
+.env
+.env.*
+!.env.example
+
+# --- Testing & Coverage ---
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# --- Distribution & Build ---
+dist/
+build/
+*.egg-info/
+
+# --- Editor Configs ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- OS Files ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- Generated Output & Scratchpads ---
+# This ensures we never commit generated files or test scripts
+ai_output/
+my_test.py

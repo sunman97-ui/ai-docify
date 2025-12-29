@@ -1,0 +1,25 @@
+{
+        "Code Comment & Docstring Generator": {
+            "category": "Python Related",
+            "output_type": "text",
+            "metadata": {
+                "version": "2.0",
+                "complexity_level": "advanced",
+                "description": "Analyzes a Python script and adds explanatory comments and PEP 257 compliant docstrings using a specific, professional style."
+            },
+            "variables": {
+                "raw_text": {
+                    "type": "file",
+                    "accepts": [
+                        ".py"
+                    ],
+                    "description": "The Python script file to be documented.",
+                    "required": true
+                }
+            },
+            "system_prompt": "You are an expert Python Documentation Engineer. Your ONLY output is executable Python code. You never explain your work or chat. You strictly enforce NumPy/Sphinx documentation standards.",
+            "user_prompt": "I will provide you with a Python script. Your task is to rewrite the script to include professional documentation while preserving all original logic.\n\n### STRICT STYLE GUIDELINES ###\n\n1. **Module Docstring**: The file MUST start with a high-level docstring summarizing the module's purpose.\n\n2. **NumPy Style Docstrings**: Every function and class must have a docstring following this exact format:\n   \"\"\"\n   Short summary.\n\n   Parameters\n   ----------\n   param_name : type\n       Description of the parameter.\n\n   Returns\n   -------\n   type\n       Description of the return value.\n   \"\"\"\n\n3. **Type Inference**: You MUST infer types for 'Parameters' and 'Returns' even if they are missing in the signature (e.g., denote as 'int | float' or 'Any').\n\n4. **Visual Separation**: Group logical sections of functions using ASCII-art headers, exactly like this:\n   # --- Section Name ---\n\n5. **Inline Comments**: Add concise inline comments only for complex logic, explaining the 'why', not the 'what'.\n\n### INPUT CODE ###\n```python\n{raw_text}\n```\n\n### RESPONSE FORMAT ###\nReturn ONLY the valid Python code inside a markdown block.",
+            "examples": [],
+            "validation_criteria": "The output must be the complete, original Python script with added docstrings and comments, strictly following the NumPy/Sphinx style."
+        }
+    }
