@@ -66,7 +66,7 @@ pip install -e .
 ```
 
 1. **Setup Environment Variables**
-Create a `.env` file in the root directory (copy from `.env.example` if available):
+Create a `.env` file in the root directory:
 
 ```ini
 OPENAI_API_KEY=sk-your-api-key-here
@@ -127,6 +127,8 @@ After the documentation is generated, `ai-docify` provides a transparent receipt
    (Includes 2048 reasoning tokens)
    Total Cost:       $0.00114
 
+```
+
 ---
 
 ## ⚙️ Configuration
@@ -153,7 +155,7 @@ To add a new model, simply edit this file:
 
 ## 🗺️ Roadmap
 
-We are actively working on making cost tracking even more precise:
+I am actively working on Batch Processing:
 
 - [x] **Pre-Run Estimation:** Calculate input tokens and estimated cost using `tiktoken`.
 - [x] **Post-Run Analysis:** Reports `output_tokens`, `reasoning_tokens` (for complex models), and the **Total Combined Cost** (Input + Output) after generation.
@@ -174,34 +176,3 @@ Contributions are welcome! Whether it's a bug fix, a new feature, or a better pr
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-
-### 👣 Final Step: Add a LICENSE file
-
-Since the README mentions the MIT License, you must create a file named `LICENSE` in your root folder.
-
-**Content for `LICENSE`:**
-
-```text
-MIT License
-
-Copyright (c) 2025 John Spencer
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
