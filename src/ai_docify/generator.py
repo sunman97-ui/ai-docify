@@ -100,8 +100,12 @@ def generate_documentation(
                 
             except json.JSONDecodeError:
                 return "Error: Failed to decode AI JSON response.", usage
+            except (AttributeError, TypeError) as e:
+                return f"Error: Malformed tool call arguments from AI (e.g., non-dict item in functions list): {e}", usage
             except KeyError as e:
                 return f"Error: AI response missing required key: {e}", usage
+            except Exception as e:
+                return f"Error during inject mode processing: {e}", usage
 
     except OpenAIError as e:
         return f"Error from API: {e}", {}
