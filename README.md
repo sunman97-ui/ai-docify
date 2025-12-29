@@ -34,7 +34,13 @@ Currently, `ai-docify` is available via source installation.
 1. **Clone the repository**
 
    ```bash
-   git clone [https://github.com/yourusername/ai-docify.git](https://github.com/sunman97-ui/ai-docify.git)
+
+   git clone https://github.com/sunman97-ui/ai-docify.git
+   
+   ```
+
+   ```bash
+
    cd ai-docify
 
     ```
