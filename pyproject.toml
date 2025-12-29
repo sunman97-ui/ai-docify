@@ -9,7 +9,9 @@ dependencies = [
     "python-dotenv",
     "rich",
     "pytest",
-    "tiktoken"
+    "tiktoken",
+    "black",   # <--- ADDED
+    "flake8"   # <--- ADDED
 ]
 
 [project.scripts]
@@ -18,6 +20,24 @@ ai-docify = "ai_docify.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# CRITICAL: This ensures the JSON template is packaged with the code
 [tool.setuptools.package-data]
 ai_docify = ["templates/*.json", "config/*.json"]
+
+# --- ADD THIS SECTION AT THE BOTTOM ---
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
