@@ -101,7 +101,7 @@ def insert_docstrings_to_source(original_source: str, docstring_map: dict) -> st
         if (
             tree.body
             and isinstance(tree.body[0], ast.Expr)
-            and isinstance(tree.body[0].value, (ast.Str, ast.Constant))
+            and isinstance(tree.body[0].value, ast.Constant)
         ):
             old_doc = tree.body[0]
             # Mark old lines for deletion
@@ -122,7 +122,7 @@ def insert_docstrings_to_source(original_source: str, docstring_map: dict) -> st
                 if (
                     node.body
                     and isinstance(node.body[0], ast.Expr)
-                    and isinstance(node.body[0].value, (ast.Str, ast.Constant))
+                    and isinstance(node.body[0].value, ast.Constant)
                 ):
 
                     old_doc = node.body[0]

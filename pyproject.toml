@@ -8,10 +8,15 @@ dependencies = [
     "openai",
     "python-dotenv",
     "rich",
-    "pytest",
     "tiktoken",
-    "black",   # <--- ADDED
-    "flake8"   # <--- ADDED
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8",
+    "pytest-cov",
 ]
 
 [project.scripts]
