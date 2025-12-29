@@ -6,6 +6,7 @@ import os
 # Ensure src is in path so we can import ai_docify
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
+
 @pytest.fixture
 def mock_openai_client(mocker):
     """
@@ -17,6 +18,7 @@ def mock_openai_client(mocker):
     # For now, we return a generic mock that tests can configure.
     mock_client = MagicMock()
     return mock_client
+
 
 @pytest.fixture
 def sample_python_code():

@@ -1,7 +1,7 @@
-import pytest
 from src.ai_docify.tools import insert_docstrings_to_source
 
 # --- Test Cases for insert_docstrings_to_source ---
+
 
 def test_insert_module_docstring_no_existing():
     """Test inserting a module docstring into a file that has none."""
@@ -12,9 +12,10 @@ This is a module docstring.
 """
 def my_func():
     pass
-'''    
+'''
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == expected
+
 
 def test_replace_module_docstring():
     """Test replacing an existing module docstring."""
@@ -30,6 +31,7 @@ def my_func():
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == expected
 
+
 def test_insert_function_docstring_no_existing():
     """Test inserting a docstring into a function that has none."""
     source = "def my_func():\n    pass\n"
@@ -38,13 +40,17 @@ def test_insert_function_docstring_no_existing():
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == expected
 
+
 def test_replace_function_docstring():
     """Test replacing an existing function docstring."""
     source = 'def my_func():\n    """Old docstring."""\n    pass\n'
     docstring_map = {"my_func": "New function docstring."}
-    expected = 'def my_func():\n    """\n    New function docstring.\n    """\n    pass\n'
+    expected = (
+        'def my_func():\n    """\n    New function docstring.\n    """\n    pass\n'
+    )
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == expected
+
 
 def test_insert_multiple_function_docstrings():
     """Test inserting docstrings into multiple functions at once."""
@@ -59,6 +65,7 @@ def test_insert_multiple_function_docstrings():
     )
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == expected
+
 
 def test_indented_function():
     """Test inserting a docstring into an indented function (e.g., inside a class)."""
@@ -83,12 +90,14 @@ def test_docstring_with_existing_quotes():
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == expected
 
+
 def test_invalid_python_code():
     """Test that invalid Python code is returned unchanged."""
     source = "def my_func(\n    pass\n"
     docstring_map = {"my_func": "This should not be inserted."}
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == source
+
 
 def test_empty_source():
     """Test that an empty source string is handled correctly."""
@@ -100,6 +109,7 @@ A docstring.
 '''
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == expected
+
 
 def test_file_with_no_functions():
     """Test a file with no functions, only a module docstring."""
@@ -113,6 +123,7 @@ b = 2
 '''
     result = insert_docstrings_to_source(source, docstring_map)
     assert result == expected
+
 
 def test_multi_line_docstring():
     """Test inserting a multi-line docstring."""
