@@ -7,7 +7,7 @@ from rich.prompt import Confirm
 from dotenv import load_dotenv
 from .generator import generate_documentation
 from .utils import estimate_cost
-from .config import validate_model
+from .config import validate_model, get_model_price 
 
 load_dotenv()
 
@@ -36,7 +36,6 @@ def main(filepath, provider, model, yes):
     console = Console()
     
     # 1. Validate Configuration
-    # This prevents using random models or typos
     if not validate_model(provider, model):
         console.print(f"[bold red]Error:[/bold red] Model '[cyan]{model}[/]' is not configured for provider '[cyan]{provider}[/]' in your pricing.json.")
         sys.exit(1)
@@ -44,22 +43,17 @@ def main(filepath, provider, model, yes):
     console.print(f"🤖 [bold green]ai-docify[/]: Checking [cyan]{filepath}[/]")
 
     try:
-        # Read the input file
         path_obj = Path(filepath)
         with open(path_obj, "r", encoding="utf-8") as f:
             original_content = f.read()
 
-        # 2. Cost Estimation
-        # Uses the new nested config logic
+        # 2. Cost Estimation (Pre-Flight)
         estimates = estimate_cost(original_content, provider, model)
-        tokens = estimates["tokens"]
-        cost = estimates["input_cost"]
-        
-        console.print("\n📊 [bold]Estimation:[/bold]")
-        console.print(f"   Tokens: [cyan]{tokens}[/]")
+        console.print("\n📊 [bold]Estimation (Input Only):[/bold]")
+        console.print(f"   Tokens: [cyan]{estimates['tokens']}[/]")
         
         if estimates["currency"] == "USD":
-            console.print(f"   Est. Cost: [green]${cost:.5f}[/]")
+            console.print(f"   Est. Cost: [green]${estimates['input_cost']:.5f}[/]")
         else:
             console.print(f"   Est. Cost: [bold blue]Free (Local/Ollama)[/]")
 
@@ -74,7 +68,8 @@ def main(filepath, provider, model, yes):
         api_key = os.getenv("OPENAI_API_KEY")
         
         with console.status(f"Generating docs using [cyan]{model}[/]...", spinner="dots"):
-            documented_content = generate_documentation(
+            # UNPACK THE TUPLE HERE
+            documented_content, usage_stats = generate_documentation(
                 file_content=original_content,
                 provider=provider,
                 model=model,
@@ -86,7 +81,6 @@ def main(filepath, provider, model, yes):
             return
 
         # 5. Write to 'ai_output' folder
-        # Ensures source directories stay clean
         output_dir = Path("ai_output")
         output_dir.mkdir(exist_ok=True)
         
@@ -98,6 +92,35 @@ def main(filepath, provider, model, yes):
 
         console.print(f"\n✅ Successfully generated documentation!")
         console.print(f"   Output saved to: [bold yellow]{output_path}[/]")
+
+        # 6. Final Usage Report (Post-Flight)
+        price_info = get_model_price(provider, model)
+        input_price = price_info.get("input_cost_per_million", 0)
+        output_price = price_info.get("output_cost_per_million", 0)
+
+        in_tokens = usage_stats.get("input_tokens", 0)
+        out_tokens = usage_stats.get("output_tokens", 0)
+        reasoning_tokens = usage_stats.get("reasoning_tokens", 0) 
+        
+        total_cost = 0.0
+        if input_price > 0:
+            input_cost = (in_tokens / 1_000_000) * input_price
+            output_cost = (out_tokens / 1_000_000) * output_price
+            total_cost = input_cost + output_cost
+
+            console.print("\n📉 [bold]Final Usage Report:[/bold]")
+            console.print(f"   Input Tokens:     [cyan]{in_tokens}[/]")
+            console.print(f"   Output Tokens:    [cyan]{out_tokens}[/]")
+            
+            # Show reasoning tokens if they exist
+            if reasoning_tokens > 0:
+                console.print(f"   (Includes [yellow]{reasoning_tokens}[/] reasoning tokens)")
+                
+            console.print(f"   Total Cost:       [bold green]${total_cost:.5f}[/]")
+        else:
+            console.print("\n📉 [bold]Final Usage Report:[/bold]")
+            console.print(f"   Output Tokens: [cyan]{out_tokens}[/]")
+            console.print(f"   Total Cost:    [bold blue]Free[/]")
 
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred in the CLI: {e}[/]")

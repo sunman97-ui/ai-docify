@@ -107,6 +107,20 @@ Do you want to proceed? [y/n]:
 
 ```
 
+### The Final Report 📉
+
+After the documentation is generated, `ai-docify` provides a transparent receipt of your actual usage, including hidden "reasoning tokens" used by advanced models:
+
+```text
+✅ Successfully generated documentation!
+   Output saved to: ai_output\my_script.doc.py
+
+📉 Final Usage Report:
+   Input Tokens:     318
+   Output Tokens:    2820
+   (Includes 2048 reasoning tokens)
+   Total Cost:       $0.00114
+
 ---
 
 ## ⚙️ Configuration
@@ -136,10 +150,8 @@ To add a new model, simply edit this file:
 We are actively working on making cost tracking even more precise:
 
 - [x] **Pre-Run Estimation:** Calculate input tokens and estimated cost using `tiktoken`.
-- [ ] **Post-Run Analysis:** Report `output_tokens` and the **Total Combined Cost** (Input + Output) after the generation is complete.
+- [x] **Post-Run Analysis:** Reports `output_tokens`, `reasoning_tokens` (for complex models), and the **Total Combined Cost** (Input + Output) after generation.
 - [ ] **Batch Processing:** Support for documenting entire directories.
-
----
 
 ## 🤝 Contributing
 
