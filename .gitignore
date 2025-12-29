@@ -40,3 +40,7 @@ Desktop.ini
 # This ensures we never commit generated files or test scripts
 ai_output/
 my_test.py
+GEMINI.md
+
+# --- Logs ---
+*.log
