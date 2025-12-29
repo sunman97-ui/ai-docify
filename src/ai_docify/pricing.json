@@ -7,6 +7,10 @@
     "gpt-5-nano": {
       "input_cost_per_million": 0.05,
       "output_cost_per_million": 0.40
+    },
+    "o3-2025-04-16": {
+      "input_cost_per_million": 1.00,
+      "output_cost_per_million": 4.00
     }
   },
   "ollama": {
