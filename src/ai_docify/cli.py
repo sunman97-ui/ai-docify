@@ -7,6 +7,7 @@ This module provides a Click-based command line interface that:
 - Optionally prompts the user for confirmation.
 - Calls the documentation generator and writes the result to ai_output/.
 - Prints a final usage/cost report.
+- Provides a command to clean the output directory.
 
 The script relies on the local project's generator, utils, and config modules
 to perform the core AI and pricing work.
@@ -25,6 +26,7 @@ from rich.prompt import Confirm
 from .generator import generate_documentation, AIDocifyError
 from .utils import estimate_cost, calculate_token_cost
 from .config import get_model_price, validate_model
+from .stripper import strip_docstrings
 
 load_dotenv()
 
@@ -117,11 +119,6 @@ def print_estimation(console: Console, estimates: Dict[str, Any]) -> None:
         Console object to print to.
     estimates : dict
         Estimation dictionary returned from estimate_cost().
-
-    Returns
-    -------
-    None
-        This function prints to the console and returns nothing.
     """
     console.print("\n📊 [bold]Estimation (Input Only):[/bold]")
     console.print(f"   Tokens: [cyan]{estimates.get('tokens')}[/]")
@@ -167,10 +164,6 @@ def print_final_usage_report(
     model : str
         Model name used for pricing lookup.
 
-    Returns
-    -------
-    None
-        This function prints the final usage and cost report to the console.
     """
     try:
         price_info = get_model_price(provider, model)
@@ -206,8 +199,66 @@ def print_final_usage_report(
         console.print(f"[yellow]Warning: Could not generate usage report: {e}[/]")
 
 
-# --- CLI Entry Point ---
-@click.command()
+# --- CLI Group ---
+@click.group()
+def main() -> None:
+    """ai-docify: A CLI for generating Python docstrings with AI."""
+    pass
+
+
+# --- Clean Command ---
+@main.command()
+@click.option("--output-dir", default="ai_output", help="Directory to clean.")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+def clean(output_dir: str, yes: bool) -> None:
+    """
+    Remove all generated files from the output directory.
+
+    Parameters
+    ----------
+    output_dir : str
+        Directory to clean.
+    yes : bool
+        If True, skip confirmation prompt.
+    """
+    console = Console()
+    output_dir_path = Path(output_dir)
+
+    if not output_dir_path.is_dir():
+        console.print(f"Directory [cyan]{output_dir}[/] not found. Nothing to do.")
+        return
+
+    files_to_delete = [f for f in output_dir_path.iterdir() if f.is_file()]
+
+    if not files_to_delete:
+        console.print(f"Directory [cyan]{output_dir}[/] is already empty.")
+        return
+
+    console.print(
+        f"The following files will be [bold red]deleted[/] from [cyan]{output_dir}[/]:"
+    )
+    for f in files_to_delete:
+        console.print(f"  - {f.name}")
+
+    if not yes:
+        if not Confirm.ask("\nAre you sure you want to proceed?"):
+            console.print("[yellow]Aborted by user.[/]")
+            return
+
+    deleted_count = 0
+    with console.status(f"Deleting files from [cyan]{output_dir}[/]..."):
+        for f in files_to_delete:
+            try:
+                f.unlink()
+                deleted_count += 1
+            except OSError as e:
+                console.print(f"[bold red]Error deleting file {f.name}: {e}[/]")
+
+    console.print(f"\n✅ Successfully deleted [bold green]{deleted_count}[/] file(s).")
+
+
+# --- Generate Command ---
+@main.command(name="generate")
 @click.argument("filepath", type=click.Path(exists=True, dir_okay=False, readable=True))
 @click.option(
     "--provider",
@@ -234,42 +285,30 @@ def print_final_usage_report(
 @click.option(
     "--output-dir", default="ai_output", help="Directory to save output files."
 )
-def main(
+def generate(
     filepath: str, provider: str, model: str, mode: str, yes: bool, output_dir: str
 ) -> None:
     """
     Generate NumPy/Sphinx style docstrings for a Python file via an AI model.
 
     Parameters
-
     ----------
-
     filepath : str
         Path to the Python file to document.
-
     provider : str
         AI provider name (e.g., 'openai', 'ollama').
-
     model : str
         Model name as configured in pricing.json.
-
     mode : str
         Operation mode, either 'rewrite' or 'inject'.
-
     yes : bool
         If True, skip the confirmation prompt and proceed automatically.
+    output_dir : str
+        Directory to save output files.
 
-    EXAMPLE USAGE:
-
-    --------------
-
-    ai-docify src/my_script.py --provider openai --model gpt-5-mini --mode rewrite
-
-    \f
-    Returns
-    -------
-    None
-        The function performs I/O and prints status; it does not return a value.
+    Examples
+    --------
+    ai-docify generate src/my_script.py --provider openai --model gpt-4-turbo --mode rewrite
     """
     logging.basicConfig(
         level=logging.INFO,
@@ -282,9 +321,7 @@ def main(
         # --- 1. Validate Configuration ---
         if not validate_model(provider, model):
             console.print(
-                f"[bold red]Error:[/bold red] Model '[cyan]{model}[/]'"
-                f"' is not configured for provider '[cyan]{provider}[/]'"
-                f" in your pricing.json."
+                f"[bold red]Error:[/bold red] Model '[cyan]{model}[/]' is not configured for provider '[cyan]{provider}[/]' in your pricing.json."
             )
             sys.exit(1)
 
@@ -297,7 +334,7 @@ def main(
         try:
             original_content = read_file(filepath)
         except IOError as e:
-            console.print(f"[bold red]Error reading file:[/] {e}")
+            console.print(f"[bold red]Error reading file:[/bold red] {e}")
             sys.exit(1)
 
         # --- 3. Cost Estimation (Pre-Flight) ---
@@ -366,6 +403,41 @@ def main(
 
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred in the CLI: {e}[/]")
+        sys.exit(1)
+
+
+# --- Strip Command ---
+@main.command()
+@click.argument("filepath", type=click.Path(exists=True, dir_okay=False, readable=True))
+def strip(filepath: str) -> None:
+    """
+    Remove all docstrings from a Python file and save the result to a new file.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the file to process.
+    """
+    console = Console()
+    stripped_output_dir = Path("stripped_scripts")
+
+    try:
+        original_content = read_file(filepath)
+        stripped_content = strip_docstrings(original_content)
+
+        path_obj = Path(filepath)
+        output_filename = f"{path_obj.stem}_strip.py"
+        output_path = write_output_file(
+            stripped_output_dir, output_filename, stripped_content
+        )
+
+        console.print(f"✅ Successfully stripped docstrings from [cyan]{filepath}[/]")
+        console.print(f"   Output saved to: [bold yellow]{output_path}[/]")
+    except IOError as e:
+        console.print(f"[bold red]Error processing file: {e}[/]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]An unexpected error occurred: {e}[/]")
         sys.exit(1)
 
 

@@ -9,6 +9,7 @@ dependencies = [
     "python-dotenv",
     "rich",
     "tiktoken",
+    "astunparse",
 ]
 
 [project.optional-dependencies]

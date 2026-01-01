@@ -45,7 +45,16 @@ def test_cli_success_with_confirmation(
 
     result = runner.invoke(
         main,
-        [mock_file, "--provider", "openai", "--model", "gpt-4", "--mode", "rewrite"],
+        [
+            "generate",
+            mock_file,
+            "--provider",
+            "openai",
+            "--model",
+            "gpt-4",
+            "--mode",
+            "rewrite",
+        ],
     )
 
     assert result.exit_code == 0
@@ -82,6 +91,7 @@ def test_cli_success_with_yes_flag(
     result = runner.invoke(
         main,
         [
+            "generate",
             mock_file,
             "--provider",
             "openai",
@@ -110,7 +120,7 @@ def test_cli_user_aborts(mock_prompt, mock_estimate, mock_validate, runner, mock
 
     result = runner.invoke(
         main,
-        [mock_file, "--provider", "openai", "--model", "gpt-4"],
+        ["generate", mock_file, "--provider", "openai", "--model", "gpt-4"],
     )
 
     assert result.exit_code == 0
@@ -124,12 +134,12 @@ def test_cli_invalid_model(mock_validate, runner, mock_file):
 
     result = runner.invoke(
         main,
-        [mock_file, "--provider", "openai", "--model", "invalid-model"],
+        ["generate", mock_file, "--provider", "openai", "--model", "invalid-model"],
     )
 
     assert result.exit_code == 1
     assert (
-        "Error: Model 'invalid-model'' is not configured for provider 'openai' in your \npricing.json.\n"
+        "Error: Model 'invalid-model' is not configured for provider 'openai' in your \npricing.json.\n"
         in result.output
     )
 
@@ -138,7 +148,14 @@ def test_cli_file_not_found(runner):
     """Test that Click handles a non-existent file path."""
     result = runner.invoke(
         main,
-        ["non_existent_file.py", "--provider", "openai", "--model", "gpt-4"],
+        [
+            "generate",
+            "non_existent_file.py",
+            "--provider",
+            "openai",
+            "--model",
+            "gpt-4",
+        ],
     )
 
     assert result.exit_code != 0
@@ -160,7 +177,7 @@ def test_cli_api_error(
 
     result = runner.invoke(
         main,
-        [mock_file, "--provider", "openai", "--model", "gpt-4", "--yes"],
+        ["generate", mock_file, "--provider", "openai", "--model", "gpt-4", "--yes"],
     )
 
     assert result.exit_code == 1
