@@ -1,130 +1,98 @@
 # ai-docify 🤖
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
 **A simple, secure, and cost-aware CLI tool for generating high-quality NumPy/Sphinx style docstrings using AI.**
 
-`ai-docify` helps you document your Python code instantly using either cloud-based models (OpenAI) or local privacy-focused models (Ollama). It is designed to be safe, transparent, and non-destructive.
+`ai-docify` helps you document your Python code instantly using either cloud-based models (OpenAI) or local privacy-focused models (Ollama). It is designed to be **safe** (using AST parsing), **transparent** (pre-flight cost checks), and **non-destructive**.
 
 ---
 
 ## ✨ Key Features
 
-- **💰 Cost-Aware Design**: `ai-docify` calculates and displays the **estimated input token cost** via `tiktoken` *before* you spend a penny.
-- **🔒 Privacy-First**: Switch seamlessly between **OpenAI** (Cloud) and **Ollama** (Local) with a single flag. Keep proprietary code on your machine when needed.
-- **🛡️ Non-Destructive**: Your original files are never touched. Documented code is safely written to a dedicated `ai_output/` directory.
-- **✌️ Dual Generation Modes**: Choose between `rewrite` for speed and economy, or `inject` for surgical precision that preserves 100% of your original code formatting.
-- **⚡ "Lean" Architecture**: Optimized prompt engineering ensures high-quality documentation without wasting tokens on unnecessary conversational fluff.
-- **⚙️ Extensible Config**: Easily add support for new models (e.g., GPT-6, Llama-4) just by updating the `pricing.json` configuration file.
+* **💰 Cost-Aware Design**: Calculates and displays the **estimated input token cost** via `tiktoken` *before* you spend a penny.
+* **🔒 Privacy-First**: Switch seamlessly between **OpenAI** (Cloud) and **Ollama** (Local) with a single flag. Keep proprietary code on your machine when needed.
+* **🛡️ AST-Powered Safety**: Unlike other tools that "guess" where to put text, `ai-docify` parses your code's Abstract Syntax Tree to surgically inject docstrings without breaking indentation or logic.
+* **↩️ The "Undo" Button**: Includes a `strip` command to safely remove all docstrings if you change your mind.
+* **✌️ Dual Generation Modes**: Choose between `rewrite` for speed/coverage, or `inject` for surgical precision.
+* **⚡ "Lean" Architecture**: Optimized prompt engineering ensures high-quality documentation without wasting tokens on conversational fluff.
 
 ---
 
 ## 🚀 Installation
 
-Currently, `ai-docify` is available via source installation.
+Install `ai-docify` directly from PyPI:
+
+```bash
+pip install ai-docify
+
+```
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- [Ollama](https://ollama.com/) (Optional, for local models)
+* **Python 3.8+**
+* **[Ollama](https://ollama.com/)** (Optional, required only if using local models)
 
-### Steps
+### Setup (OpenAI Only)
 
-1. **Clone the repository**
+If you plan to use OpenAI models, set your API key as an environment variable:
 
-   ```bash
-   git clone https://github.com/sunman97-ui/ai-docify.git
-   cd ai-docify
-
-   ```
-
-2. **Create a Virtual Environment** (Recommended)
+**Mac/Linux:**
 
 ```bash
-# Windows
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-# Mac/Linux
-python3 -m venv venv
-source venv/bin/activate
+export OPENAI_API_KEY=sk-your-api-key-here
 
 ```
 
-1. **Install the package**
+**Windows (PowerShell):**
 
-```bash
-pip install -e .
-
-```
-
-1. **Setup Environment Variables**
-Create a `.env` file in the root directory (required for OpenAI):
-
-```ini
-OPENAI_API_KEY=sk-your-api-key-here
+```powershell
+$env:OPENAI_API_KEY="sk-your-api-key-here"
 
 ```
+
+*(Alternatively, you can create a `.env` file in your project root)*
+
+---
+
+## 💻 VS Code Extension
+
+Prefer a GUI? This CLI powers the **AI Docify for VS Code** extension.
+👉 **[Download AI Docify for VS Code](https://www.google.com/search?q=%23)** *(Link to your Marketplace page once published)*
 
 ---
 
 ## 📖 Usage
 
-The CLI requires you to specify the **Provider** and the **Model** explicitly to prevent accidental costs.
+### 1. Generating Documentation
 
-### Choosing Your Mode: `rewrite` vs. `inject`
+You must specify the **Provider**, **Model**, and **Mode**.
 
-`ai-docify` offers two distinct documentation strategies.
+#### `inject` Mode (Recommended)
 
-#### `rewrite` (Default Mode)
-
-*Best for speed, economy, and general use.*
-
-This mode asks the AI to rewrite the entire file, adding comprehensive documentation. It is the most cost-effective and reliable method for achieving full documentation coverage.
+*Best for: Surgical precision and preserving formatting.*
+Uses AST parsing to find functions and classes, injecting docstrings exactly where they belong without touching a single line of your actual code.
 
 ```bash
-ai-docify my_script.py --provider openai --model gpt-5-mini --mode rewrite
+ai-docify generate my_script.py --provider openai --model gpt-5-mini --mode inject
 
 ```
 
-#### `inject` Mode
+#### `rewrite` Mode
 
-*Best for surgical precision and preserving formatting.*
-
-This mode intelligently injects docstrings without altering any other part of your code—including formatting and comments. It uses Function Calling to insert docstrings directly into the AST (Abstract Syntax Tree). This precision comes at a slightly higher token cost.
+*Best for: Speed and heavy refactoring.*
+Asks the AI to rewrite the file with docs included. Good for initial drafts or undocumented legacy files.
 
 ```bash
-ai-docify my_script.py --provider openai --model gpt-5-mini --mode inject
+# Using a local model (Free)
+ai-docify generate my_script.py --provider ollama --model llama3 --mode rewrite
 
 ```
 
-### 1. Using OpenAI (Cloud)
+### 2. The Safety Check 🛡️
 
-*Best for: High accuracy, complex logic, and standard pricing.*
-
-```bash
-ai-docify my_script.py --provider openai --model gpt-5-nano --mode inject
-
-```
-
-### 2. Using Ollama (Local)
-
-*Best for: Privacy, zero cost, and offline development.*
-
-```bash
-# Ensure you have pulled the model first: ollama pull llama3.1:8b
-ai-docify my_script.py --provider ollama --model llama3.1:8b --mode rewrite
-
-```
-
-### The Safety Check 🛡️
-
-Before generating anything, the tool will pause and show you an estimation:
+Before generating anything, the tool will pause and show you an exact cost estimate:
 
 ```text
-🤖 ai-docify: Checking my_script.py
+🤖 ai-docify: Checking my_script.py in INJECT mode
 
 📊 Estimation (Input Only):
    Tokens: 350
@@ -134,61 +102,54 @@ Do you want to proceed? [y/n]:
 
 ```
 
-### The Final Report 📉
+### 3. Stripping Docstrings (Undo) ↩️
 
-After the documentation is generated, `ai-docify` provides a transparent receipt of your actual usage, including hidden "reasoning tokens" used by advanced models:
+Need to start over? The `strip` command uses AST parsing to cleanly remove all docstrings from a file, leaving your logic intact. It saves the clean version to a `stripped_scripts/` folder by default.
 
-```text
-✅ Successfully generated documentation!
-   Output saved to: ai_output\my_script.doc.py
+```bash
+ai-docify strip my_script.py
 
-📉 Final Usage Report:
-   Input Tokens:     318
-   Output Tokens:    2820
-   (Includes 2048 reasoning tokens)
-   Total Cost:       $0.00114
+```
+
+### 4. Cleaning Output
+
+To remove all generated files from the default `ai_output/` directory:
+
+```bash
+ai-docify clean
 
 ```
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Supported Models
 
-`ai-docify` is built to be extensible. You define which models are allowed and how much they cost.
+`ai-docify` comes pre-configured with pricing and token limits for popular models.
 
-**Location:** `src/ai_docify/pricing.json`
+**OpenAI:**
 
-To add a new model, simply edit this file:
+* `o3-2025-04-16`
+* `gpt-5` / `gpt-5-mini` /  `gpt-5-nano`
+* `gpt-5.2`
 
-```json
-{
-  "openai": {
-    "new-model-name": {
-      "input_cost_per_million": 1.50,
-      "output_cost_per_million": 2.00
-    }
-  }
-}
+**Ollama (Local):**
 
-```
+* `llama3.1:8b`
+* `qwen2.5-coder:7b`
+* (Any model pulled via `ollama pull` works with the `--provider ollama` flag)
+
+*Missing a model? Feel free to open an Issue or Pull Request to update the internal pricing configuration!*
 
 ---
-
-## 🗺️ Roadmap
-
-- [x] **Pre-Run Estimation:** Calculate input tokens and estimated cost using `tiktoken`.
-- [x] **Post-Run Analysis:** Reports `output_tokens`, `reasoning_tokens`, and Total Cost.
-- [x] **Architecture Refactor:** Simplified codebase for easier community contribution.
-- [ ] **Batch Processing:** Support for documenting entire directories.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Whether it's a bug fix, a new feature, or a better prompt template:
+We welcome contributions! Whether it's a bug fix, a new feature, or a better prompt template:
 
 1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
+2. Create your Feature Branch (`git checkout -b feature/NewModel`)
+3. Commit your Changes (`git commit -m 'Add GPT-6 support'`)
+4. Push to the Branch (`git push origin feature/NewModel`)
 5. Open a Pull Request
 
 ---

@@ -1,8 +1,9 @@
 """
-Utilities for generating or injecting NumPy-style docstrings into Python source
-code using a large language model (LLM). This module centralizes prompt/template
-loading, payload construction for the LLM, API interaction, and post-processing
-(including injecting docstrings back into source).
+Utilities for generating and injecting NumPy-style docstrings into
+Python source files using a large language model (LLM). Centralizes
+prompt and template loading, payload construction for the LLM, API
+interaction, and post-processing including injecting generated
+docstrings back into source.
 """
 
 import json
@@ -53,16 +54,6 @@ DOCSTRING_TOOL_SCHEMA = [
 class AIDocifyError(Exception):
     """
     Custom exception for AI-Docify specific errors.
-
-    Parameters
-    ----------
-    message : str | None
-        Optional error message describing the failure.
-
-    Returns
-    -------
-    AIDocifyError
-        The instantiated exception.
     """
 
     pass
@@ -73,16 +64,10 @@ def _load_template() -> dict:
     """
     Load the JSON prompt template from disk.
 
-    Parameters
-    ----------
-    None : None
-        No parameters.
-
     Returns
     -------
     dict
         The loaded JSON template as a dictionary.
-
     """
     template_path = Path(__file__).parent / "templates" / "docstring_generator.json"
     if not template_path.exists():
@@ -102,13 +87,14 @@ def prepare_llm_payload(file_content: str, mode: str = "rewrite") -> Dict[str, A
     file_content : str
         The raw source file content to be included in the LLM prompt.
     mode : str, optional
-        Mode of operation; one of "rewrite" or "inject" (default is "rewrite").
+        Mode of operation; one of "rewrite" or "inject" (default is
+        "rewrite").
 
     Returns
     -------
     Dict[str, Any]
-        A payload dictionary containing the messages and, for "inject" mode,
-        a tools schema.
+        A payload dictionary containing the messages and, for "inject"
+        mode, a tools schema.
     """
     template = _load_template()
     prompt_details = template.get(mode, template.get("rewrite"))
@@ -150,18 +136,21 @@ def generate_documentation(
     model : str
         The model name to request from the provider.
     api_key : str | None
-        API key for authentication with the provider (required for OpenAI).
+        API key for authentication with the provider (required for
+        OpenAI).
     mode : str, optional
         Operation mode: "rewrite" returns a full rewritten source string;
-        "inject" returns the original source with docstrings injected (default "rewrite").
+        "inject" returns the original source with docstrings injected
+        (default "rewrite").
     console : Optional[Console], optional
-        Optional Rich Console for user-facing messages (default creates a new Console).
+        Optional Rich Console for user-facing messages (default creates a
+        new Console).
 
     Returns
     -------
     Tuple[str, Dict[str, Any]]
-        A tuple of (resulting_source_or_text, usage_stats) where usage_stats is a
-        mapping containing token usage keys ("input_tokens",
+        A tuple of (resulting_source_or_text, usage_stats) where usage_stats
+        is a mapping containing token usage keys ("input_tokens",
         "output_tokens", "reasoning_tokens").
     """
     if console is None:

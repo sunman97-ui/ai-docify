@@ -32,17 +32,6 @@ DEFAULT_CONFIG = {
 def load_config() -> dict:
     """
     Load configuration from pricing.json.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    dict
-        The pricing configuration loaded from the JSON file. If the file does not
-        exist or an error occurs while loading/parsing it, the DEFAULT_CONFIG
-        is returned as a fallback.
     """
     if not CONFIG_PATH.exists():
         return DEFAULT_CONFIG
