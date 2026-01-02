@@ -1,3 +1,5 @@
+[![PyPI version](https://badge.fury.io/py/ai-docify.svg)](https://badge.fury.io/py/ai-docify)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 # ai-docify 🤖
 
 **A simple, secure, and cost-aware CLI tool for generating high-quality NumPy/Sphinx style docstrings using AI.**
