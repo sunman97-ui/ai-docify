@@ -41,7 +41,7 @@ Desktop.ini
 ai_output/
 my_test.py
 my_test.doc.py
-
+stripped_scripts/
 # --- Logs ---
 *.log
 

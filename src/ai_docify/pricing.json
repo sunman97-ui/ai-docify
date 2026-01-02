@@ -17,6 +17,10 @@
     "llama3.1:8b": {
       "input_cost_per_million": 0.0,
       "output_cost_per_million": 0.0
+    },
+    "qwen2.5-coder:7b": {
+      "input_cost_per_million": 0.0,
+      "output_cost_per_million": 0.0
     }
   }
 }
