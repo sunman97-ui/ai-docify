@@ -56,7 +56,7 @@ $env:OPENAI_API_KEY="sk-your-api-key-here"
 ## 💻 VS Code Extension
 
 Prefer a GUI? This CLI powers the **AI Docify for VS Code** extension.
-👉 **[Download AI Docify for VS Code](https://www.google.com/search?q=%23)** *(Link to your Marketplace page once published)*
+👉 **[Download AI Docify for VS Code](https://github.com/sunman97-ui/ai-docify-vscode)
 
 ---
 
