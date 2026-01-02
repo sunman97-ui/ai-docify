@@ -14,6 +14,7 @@ to perform the core AI and pricing work.
 """
 
 import os
+import json
 import sys
 import logging
 from pathlib import Path
@@ -25,7 +26,7 @@ from rich.prompt import Confirm
 
 from .generator import generate_documentation, AIDocifyError
 from .utils import estimate_cost, calculate_token_cost
-from .config import get_model_price, validate_model
+from .config import get_model_price, validate_model, load_config
 from .stripper import strip_docstrings
 
 load_dotenv()
@@ -120,7 +121,7 @@ def print_estimation(console: Console, estimates: Dict[str, Any]) -> None:
     estimates : dict
         Estimation dictionary returned from estimate_cost().
     """
-    console.print("\n📊 [bold]Estimation (Input Only):[/bold]")
+    console.print("\n[bold]Estimation (Input Only):[/bold]")
     console.print(f"   Tokens: [cyan]{estimates.get('tokens')}[/]")
 
     if estimates.get("currency") == "USD":
@@ -175,7 +176,7 @@ def print_final_usage_report(
         reasoning_tokens = usage_stats.get("reasoning_tokens", 0)
 
         total_cost = 0.0
-        console.print("\n📉 [bold]Final Usage Report:[/bold]")
+        console.print("\n[bold]Final Usage Report:[/bold]")
 
         if input_price > 0:
             input_cost = calculate_token_cost(in_tokens, input_price)
@@ -254,7 +255,7 @@ def clean(output_dir: str, yes: bool) -> None:
             except OSError as e:
                 console.print(f"[bold red]Error deleting file {f.name}: {e}[/]")
 
-    console.print(f"\n✅ Successfully deleted [bold green]{deleted_count}[/] file(s).")
+    console.print(f"\nSuccessfully deleted [bold green]{deleted_count}[/] file(s).")
 
 
 # --- Generate Command ---
@@ -282,11 +283,18 @@ def clean(output_dir: str, yes: bool) -> None:
     ),
 )
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+@click.option("--check", is_flag=True, help="Return cost estimate as JSON and exit.")
 @click.option(
     "--output-dir", default="ai_output", help="Directory to save output files."
 )
 def generate(
-    filepath: str, provider: str, model: str, mode: str, yes: bool, output_dir: str
+    filepath: str,
+    provider: str,
+    model: str,
+    mode: str,
+    yes: bool,
+    check: bool,
+    output_dir: str,
 ) -> None:
     """
     Generate NumPy/Sphinx style docstrings for a Python file via an AI model.
@@ -303,6 +311,8 @@ def generate(
         Operation mode, either 'rewrite' or 'inject'.
     yes : bool
         If True, skip the confirmation prompt and proceed automatically.
+    check : bool
+        If True, return cost estimate as JSON and exit.
     output_dir : str
         Directory to save output files.
 
@@ -325,10 +335,12 @@ def generate(
             )
             sys.exit(1)
 
-        console.print(
-            f"🤖 [bold green]ai-docify[/]: Checking [cyan]{filepath}[/]"
-            f" in [yellow]{mode.upper()}[/] mode"
-        )
+        # Only print the "Checking" message if we are NOT in check mode
+        if not check:
+            console.print(
+                f"[bold green][AI] ai-docify[/]: Checking [cyan]{filepath}[/]"
+                f" in [yellow]{mode.upper()}[/] mode"
+            )
 
         # --- 2. Read file content ---
         try:
@@ -342,6 +354,11 @@ def generate(
             # Pass the selected mode to the estimator
             # so it can account for mode-specific tokens.
             estimates = estimate_cost(original_content, provider, model, mode=mode)
+            if check:
+                # Output ONLY pure JSON for the extension to read
+                # We use sys.stdout.write to avoid adding extra newlines or formatting
+                click.echo(json.dumps(estimates))
+                sys.exit(0)
             print_estimation(console, estimates)
         except Exception as e:
             console.print(f"[bold yellow]Warning: Could not estimate cost: {e}[/]")
@@ -392,7 +409,7 @@ def generate(
                 output_dir_path, output_filename, documented_content
             )
 
-            console.print("\n✅ Successfully generated documentation!")
+            console.print("\nSuccessfully generated documentation!")
             console.print(f"   Output saved to: [bold yellow]{output_path}[/]")
         except IOError as e:
             console.print(f"[bold red]Error writing output file: {e}[/]")
@@ -404,6 +421,15 @@ def generate(
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred in the CLI: {e}[/]")
         sys.exit(1)
+
+
+# --- Config Command (For VS Code) ---
+@main.command(name="config")
+def config_dump() -> None:
+    """Print the loaded pricing configuration as JSON."""
+    # Load and dump to stdout for the extension to read
+    cfg = load_config()
+    click.echo(json.dumps(cfg))
 
 
 # --- Strip Command ---
