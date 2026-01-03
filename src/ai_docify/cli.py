@@ -23,13 +23,12 @@ import click
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.prompt import Confirm
+import importlib.metadata
 
 from .generator import generate_documentation, AIDocifyError
 from .utils import estimate_cost, calculate_token_cost
 from .config import get_model_price, validate_model, load_config
 from .stripper import strip_docstrings
-
-__version__ = "1.1.1"
 
 load_dotenv()
 
@@ -204,7 +203,7 @@ def print_final_usage_report(
 
 # --- CLI Group ---
 @click.group()
-@click.version_option(__version__)
+@click.version_option(version=importlib.metadata.version("ai-docify"))
 def main() -> None:
     """ai-docify: A CLI for generating Python docstrings with AI."""
     pass
