@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Tuple, Dict, Any, Optional
 from openai import OpenAI, OpenAIError
 from rich.console import Console
+import ast
 
 # Internal imports
 from .tools import insert_docstrings_to_source
@@ -78,7 +79,9 @@ def _load_template() -> dict:
 
 
 # --- Payload Construction ---
-def prepare_llm_payload(file_content: str, mode: str = "rewrite") -> Dict[str, Any]:
+def prepare_llm_payload(
+    file_content: str, mode: str = "rewrite", function: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Construct the exact payload (messages + optional tools) for the LLM.
 
@@ -89,6 +92,8 @@ def prepare_llm_payload(file_content: str, mode: str = "rewrite") -> Dict[str, A
     mode : str, optional
         Mode of operation; one of "rewrite" or "inject" (default is
         "rewrite").
+    function : str, optional
+        If provided, extract only this function/class's source code for the prompt.
 
     Returns
     -------
@@ -100,7 +105,36 @@ def prepare_llm_payload(file_content: str, mode: str = "rewrite") -> Dict[str, A
     prompt_details = template.get(mode, template.get("rewrite"))
 
     system_prompt = prompt_details["system_prompt"]
-    user_prompt = prompt_details["user_prompt"].format(raw_text=file_content)
+    user_prompt_template = prompt_details["user_prompt"]
+
+    source_for_llm = file_content
+    if function:
+        try:
+            tree = ast.parse(file_content)
+            found_node = None
+            for node in ast.walk(tree):
+                if (
+                    isinstance(
+                        node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                    )
+                    and node.name == function
+                ):
+                    found_node = node
+                    break
+
+            if found_node:
+                # ast.unparse requires Python 3.9+
+                source_for_llm = ast.unparse(found_node)
+            else:
+                logger.warning(
+                    f"Function '{function}' not found in AST. Falling back to full file."
+                )
+        except (SyntaxError, AttributeError) as e:
+            logger.warning(
+                f"Failed to parse AST for function '{function}': {e}. Falling back to full file."
+            )
+
+    user_prompt = user_prompt_template.format(raw_text=source_for_llm)
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -123,6 +157,7 @@ def generate_documentation(
     api_key: str | None,
     mode: str = "rewrite",
     console: Optional[Console] = None,
+    function: Optional[str] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Generate documentation for Python source.
@@ -145,6 +180,8 @@ def generate_documentation(
     console : Optional[Console], optional
         Optional Rich Console for user-facing messages (default creates a
         new Console).
+    function : str, optional
+        If provided, target a specific function or class within the file.
 
     Returns
     -------
@@ -176,7 +213,7 @@ def generate_documentation(
 
         # 2. Prepare Payload (Centralized Logic)
         try:
-            payload = prepare_llm_payload(file_content, mode=mode)
+            payload = prepare_llm_payload(file_content, mode=mode, function=function)
         except Exception as e:
             raise AIDocifyError(f"Error building messages: {e}") from e
 

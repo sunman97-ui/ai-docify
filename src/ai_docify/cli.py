@@ -287,6 +287,11 @@ def clean(output_dir: str, yes: bool) -> None:
 @click.option(
     "--output-dir", default="ai_output", help="Directory to save output files."
 )
+@click.option(
+    "--function",
+    default=None,
+    help="Target a specific function or class for documentation.",
+)
 def generate(
     filepath: str,
     provider: str,
@@ -295,6 +300,7 @@ def generate(
     yes: bool,
     check: bool,
     output_dir: str,
+    function: Optional[str],
 ) -> None:
     """
     Generate NumPy/Sphinx style docstrings for a Python file via an AI model.
@@ -315,10 +321,14 @@ def generate(
         If True, return cost estimate as JSON and exit.
     output_dir : str
         Directory to save output files.
+    function : str, optional
+        If provided, target a specific function or class within the file.
 
     Examples
     --------
-    ai-docify generate src/my_script.py --provider openai --model gpt-4-turbo --mode rewrite
+    ai-docify generate src/my_script.py --provider ollama --model llama3.1:8b --mode rewrite
+    ai-docify generate src/my_script.py --provider openai --model gpt-5-mini --mode inject
+    ai-docify generate src/my_script.py --provider openai --model gpt-5-mini --function my_function
     """
     logging.basicConfig(
         level=logging.INFO,
@@ -326,6 +336,15 @@ def generate(
         handlers=[logging.StreamHandler(sys.stdout)],
     )
     console = Console()
+
+    # --- 0. Set effective mode (Safety Check) ---
+    effective_mode = mode
+    if function:
+        effective_mode = "inject"
+        if mode == "rewrite" and not check:
+            console.print(
+                "[bold yellow]Info:[/bold yellow] Switched to 'inject' mode as it is required for single-function generation."
+            )
 
     try:
         # --- 1. Validate Configuration ---
@@ -339,7 +358,8 @@ def generate(
         if not check:
             console.print(
                 f"[bold green][AI] ai-docify[/]: Checking [cyan]{filepath}[/]"
-                f" in [yellow]{mode.upper()}[/] mode"
+                f"{f' (targeting [bold yellow]{function}[/bold yellow])' if function else ''}"
+                f" in [yellow]{effective_mode.upper()}[/] mode"
             )
 
         # --- 2. Read file content ---
@@ -353,7 +373,13 @@ def generate(
         try:
             # Pass the selected mode to the estimator
             # so it can account for mode-specific tokens.
-            estimates = estimate_cost(original_content, provider, model, mode=mode)
+            estimates = estimate_cost(
+                original_content,
+                provider,
+                model,
+                mode=effective_mode,
+                function=function,
+            )
             if check:
                 # Output ONLY pure JSON for the extension to read
                 # We use sys.stdout.write to avoid adding extra newlines or formatting
@@ -394,8 +420,9 @@ def generate(
                     provider=provider,
                     model=model,
                     api_key=api_key,
-                    mode=mode,
+                    mode=effective_mode,
                     console=console,
+                    function=function,
                 )
             except AIDocifyError as e:
                 console.print(f"[bold red]Error generating documentation: {e}[/]")
