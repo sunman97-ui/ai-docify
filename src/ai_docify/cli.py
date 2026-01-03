@@ -29,6 +29,8 @@ from .utils import estimate_cost, calculate_token_cost
 from .config import get_model_price, validate_model, load_config
 from .stripper import strip_docstrings
 
+__version__ = "1.1.0"
+
 load_dotenv()
 
 
@@ -202,6 +204,7 @@ def print_final_usage_report(
 
 # --- CLI Group ---
 @click.group()
+@click.version_option(__version__)
 def main() -> None:
     """ai-docify: A CLI for generating Python docstrings with AI."""
     pass
