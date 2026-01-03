@@ -29,7 +29,7 @@ from .utils import estimate_cost, calculate_token_cost
 from .config import get_model_price, validate_model, load_config
 from .stripper import strip_docstrings
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 load_dotenv()
 
