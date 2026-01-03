@@ -13,6 +13,7 @@
 * **🛡️ AST-Powered Safety**: Unlike other tools that "guess" where to put text, `ai-docify` parses your code's Abstract Syntax Tree to surgically inject docstrings without breaking indentation or logic.
 * **↩️ The "Undo" Button**: Includes a `strip` command to safely remove all docstrings if you change your mind.
 * **✌️ Dual Generation Modes**: Choose between `rewrite` for speed/coverage, or `inject` for surgical precision.
+* **🎯 Granular Control**: Document an entire file or target a single function or class for surgical precision.
 * **⚡ "Lean" Architecture**: Optimized prompt engineering ensures high-quality documentation without wasting tokens on conversational fluff.
 
 ---
@@ -87,7 +88,18 @@ ai-docify generate my_script.py --provider ollama --model llama3 --mode rewrite
 
 ```
 
-### 2. The Safety Check 🛡️
+### 2. Targeting a Single Function
+
+*Best for: Quickly documenting a specific piece of code you're working on.*
+
+Use the `--function` flag to target a single function or class by name. This is faster, cheaper, and automatically uses the safe `inject` mode.
+
+```bash
+# Target only the 'calculate_total' function in the file
+ai-docify generate utils.py --provider openai --model gpt-5-mini --function calculate_total
+```
+
+### 3. The Safety Check 🛡️
 
 Before generating anything, the tool will pause and show you an exact cost estimate:
 

@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from src.ai_docify.utils import calculate_token_cost, estimate_cost
 
+
 # --- Tests for calculate_token_cost ---
 
 
@@ -51,7 +52,9 @@ def test_estimate_cost_paid_model(
     mock_tiktoken.encoding_for_model.return_value = mock_encoding
 
     # 2. Execute
-    result = estimate_cost("file_content", "openai", "gpt-4", mode="rewrite")
+    result = estimate_cost(
+        "file_content", "openai", "gpt-4", mode="rewrite", function=None
+    )
 
     # 3. Verify Logic
     # Token count = len(encode("sysusr")) + (len(messages) * 4)
@@ -66,7 +69,9 @@ def test_estimate_cost_paid_model(
 
     # Verify calls
     mock_get_model_price.assert_called_with("openai", "gpt-4")
-    mock_prepare_payload.assert_called_with("file_content", mode="rewrite")
+    mock_prepare_payload.assert_called_with(
+        "file_content", mode="rewrite", function=None
+    )
     mock_tiktoken.encoding_for_model.assert_called_with("gpt-4")
 
 

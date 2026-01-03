@@ -9,7 +9,7 @@ estimates match the actual generation behavior.
 
 from __future__ import annotations
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import tiktoken
 from .config import get_model_price
 from .generator import prepare_llm_payload
@@ -47,6 +47,7 @@ def estimate_cost(
     provider: str,
     model: str,
     mode: str = "rewrite",
+    function: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Estimate token count and cost using the exact payload logic used for generation.
@@ -61,6 +62,8 @@ def estimate_cost(
         The model identifier used to select the tokenizer/encoding.
     mode : str
         Mode passed to the payload preparer (e.g., "rewrite", "summarize").
+    function : str, optional
+        The specific function being targeted, if any.
 
     Returns
     -------
@@ -73,7 +76,7 @@ def estimate_cost(
     price_info = get_model_price(provider, model)
 
     # 1. Get the authoritative payload from generator
-    payload = prepare_llm_payload(file_content, mode=mode)
+    payload = prepare_llm_payload(file_content, mode=mode, function=function)
 
     messages = payload.get("messages", [])
     tools = payload.get("tools")
